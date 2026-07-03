@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lab-bg: #0A0B0E;
+  --lab-surface-1: #12141A;
+  --lab-surface-2: #1A1D26;
+  --lab-border: #262A35;
+  --lab-border-strong: #343947;
+  --lab-text: #E9ECF2;
+  --lab-text-dim: #9AA3B5;
+  --lab-text-muted: #5D6577;
+  --lab-reagent: #A3F53C;
+  --lab-reagent-dim: rgba(163,245,60,0.12);
+  --lab-success: #4ADE80;
+  --lab-warning: #FBBF24;
+  --lab-danger: #FB7185;
+  --lab-info: #38BDF8;
+  --lab-node-image: #8B7CFF;
+  --lab-node-video: #4DD8FF;
+  --lab-node-copy: #FFC46B;
+  --lab-node-design: #FF7AC6;
+  --lab-node-publish: #5EE38B;
+  --lab-node-utility: #9AA3B5;
+  --lab-canvas-dot: #1B1E27;
+  --lab-edge: #343947;
+}
+
+@layer base {
+  * {
+    @apply border-lab-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply min-h-screen bg-lab-bg font-sans text-lab-text antialiased;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .lab-wordmark {
+    @apply font-display text-xl font-bold;
+  }
+
+  .lab-wordmark span {
+    color: var(--lab-reagent);
+  }
+}
+
+.react-flow {
+  background: var(--lab-bg);
+}
+
+.react-flow__node {
+  border-radius: 12px;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-color: var(--lab-bg);
+  background: var(--lab-border-strong);
+}
+
+.react-flow__handle-connecting,
+.react-flow__handle-valid {
+  background: var(--lab-reagent);
+}
+
+.react-flow__edge-path {
+  stroke: var(--lab-edge);
+  stroke-width: 2;
+}
+
+.react-flow__controls {
+  border: 1px solid var(--lab-border);
+  background: var(--lab-surface-1);
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--lab-border);
+  background: var(--lab-surface-1);
+  color: var(--lab-text);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--lab-surface-2);
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--lab-border);
+  border-radius: 8px;
+  background: var(--lab-surface-1);
+}
