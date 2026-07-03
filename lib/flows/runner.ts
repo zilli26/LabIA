@@ -1,11 +1,9 @@
-import "server-only";
-
 import { Prisma } from "@prisma/client";
 
-import { parseStoredFlowGraph } from "@/lib/db/flows";
 import { prisma } from "@/lib/db/prisma";
 import { estimateFlowCost, sumCosts } from "@/lib/flows/costs";
 import type { FlowGraph } from "@/lib/flows/graph";
+import { parseStoredFlowGraph } from "@/lib/flows/parse";
 import {
   enqueueFlowRunNodeJob,
   registerFlowNodeWorker,

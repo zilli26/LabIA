@@ -1,5 +1,3 @@
-import "server-only";
-
 import { PgBoss, type Job } from "pg-boss";
 
 export const FLOW_NODE_QUEUE = "flow-node-execution";
@@ -10,6 +8,15 @@ export type FlowNodeJobData = {
 };
 
 let bossPromise: Promise<PgBoss> | undefined;
+
+async function ensureFlowNodeQueue(boss: PgBoss) {
+  await boss.createQueue(FLOW_NODE_QUEUE, {
+    retryLimit: 2,
+    retryDelay: 5,
+    retentionSeconds: 60 * 60 * 24 * 14,
+    deleteAfterSeconds: 60 * 60 * 24 * 7,
+  });
+}
 
 export async function getPgBoss() {
   if (!bossPromise) {
@@ -33,12 +40,7 @@ export async function getPgBoss() {
 
 export async function enqueueFlowRunNodeJob(data: FlowNodeJobData) {
   const boss = await getPgBoss();
-  await boss.createQueue(FLOW_NODE_QUEUE, {
-    retryLimit: 2,
-    retryDelay: 5,
-    retentionSeconds: 60 * 60 * 24 * 14,
-    deleteAfterSeconds: 60 * 60 * 24 * 7,
-  });
+  await ensureFlowNodeQueue(boss);
 
   const jobId = await boss.send(FLOW_NODE_QUEUE, data, {
     retryLimit: 2,
@@ -58,6 +60,7 @@ export async function registerFlowNodeWorker(
   handler: (job: Job<FlowNodeJobData>) => Promise<void>,
 ) {
   const boss = await getPgBoss();
+  await ensureFlowNodeQueue(boss);
 
   return boss.work<FlowNodeJobData>(
     FLOW_NODE_QUEUE,

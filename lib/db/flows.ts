@@ -4,7 +4,9 @@ import type { Prisma } from "@prisma/client";
 
 import { hasDatabaseEnv } from "@/lib/db/env";
 import { prisma } from "@/lib/db/prisma";
-import { isFlowGraph, starterFlowGraph, type FlowGraph } from "@/lib/flows/graph";
+import { starterFlowGraph, type FlowGraph } from "@/lib/flows/graph";
+
+export { parseStoredFlowGraph } from "@/lib/flows/parse";
 
 const DEFAULT_WORKSPACE_SLUG =
   process.env.DEFAULT_WORKSPACE_SLUG ?? "felipe-labia";
@@ -139,8 +141,4 @@ export async function updateFlowGraph({
       graph: graph as unknown as Prisma.InputJsonValue,
     },
   });
-}
-
-export function parseStoredFlowGraph(graph: Prisma.JsonValue): FlowGraph {
-  return isFlowGraph(graph) ? graph : starterFlowGraph;
 }

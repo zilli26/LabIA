@@ -1,6 +1,6 @@
 import type { FlowRun, FlowRunNode, Prisma } from "@prisma/client";
 
-import { parseStoredFlowGraph } from "@/lib/db/flows";
+import { parseStoredFlowGraph } from "@/lib/flows/parse";
 import { getFlowRunRealtimeConfig } from "@/lib/flows/realtime";
 
 type FlowRunWithNodes = FlowRun & {

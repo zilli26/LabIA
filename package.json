@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "smoke:image": "tsx scripts/smoke-image.ts",
     "typecheck": "tsc --noEmit",
+    "worker": "tsx scripts/worker.ts",
     "worker:image": "tsx scripts/image-worker.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
