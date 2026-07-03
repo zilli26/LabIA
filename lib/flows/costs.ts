@@ -1,6 +1,6 @@
 import type { CostEstimate } from "@/lib/providers/model-provider";
 import type { FlowGraph } from "@/lib/flows/graph";
-import { listNodeDefinitions } from "@/lib/flows/registry";
+import { getNodeDefinition } from "@/lib/flows/registry";
 import { buildExecutionPlan, type FlowExecutionPlan } from "@/lib/flows/topology";
 import { zeroCost } from "@/lib/flows/types";
 
@@ -14,10 +14,6 @@ export type FlowCostEstimate = {
   total: CostEstimate;
   nodes: NodeCostEstimate[];
 };
-
-const definitionsByType = new Map(
-  listNodeDefinitions().map((definition) => [definition.type, definition]),
-);
 
 export async function estimateFlowCost(
   graph: FlowGraph,
@@ -34,7 +30,7 @@ export async function estimateFlowCost(
   const nodes: NodeCostEstimate[] = [];
 
   for (const plannedNode of plan.nodes) {
-    const definition = definitionsByType.get(plannedNode.type);
+    const definition = getNodeDefinition(plannedNode.type);
 
     if (!definition) {
       throw new Error(`NodeDefinition não registrado: ${plannedNode.type}`);
@@ -60,19 +56,21 @@ export async function estimateFlowCost(
 }
 
 export function sumCosts(costs: CostEstimate[]) {
-  return costs.reduce<CostEstimate>(
-    (total, cost) => {
-      const totalLineItems = total.lineItems ?? [];
-      const costLineItems = cost.lineItems ?? [];
-
-      return {
-        usd: total.usd + cost.usd,
-        brl: total.brl + cost.brl,
-        usdBrlRate: cost.usdBrlRate || total.usdBrlRate,
-        lineItems: totalLineItems.concat(costLineItems),
-        source: "flow",
-      };
-    },
+  const summed = costs.reduce<CostEstimate>(
+    (total, cost) => ({
+      usd: total.usd + cost.usd,
+      brl: total.brl + cost.brl,
+      usdBrlRate: total.usdBrlRate || cost.usdBrlRate,
+      lineItems: (total.lineItems ?? []).concat(cost.lineItems ?? []),
+      source: "flow",
+    }),
     zeroCost,
   );
+
+  return {
+    ...summed,
+    // A taxa agregada deriva dos totais; nós com taxas distintas não podem
+    // eleger a taxa de um único nó como taxa do fluxo.
+    usdBrlRate: summed.usd > 0 ? summed.brl / summed.usd : summed.usdBrlRate,
+  };
 }
