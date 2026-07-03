@@ -1,6 +1,6 @@
 # 01-Imagens — Construção
 
-**Status:** não iniciado · **Etapa:** E1 · **Depende de:** fundação do canvas (módulo 03, parte E1) e `ModelProvider`.
+**Status:** tarefas 1-3 implementadas em 2026-07-03; validação local passou em Prisma validate, typecheck e lint. Smoke script criado e executado até a estimativa de custo; geração real pendente porque este clone não tem `FAL_KEY`/Supabase em `.env.local`. · **Etapa:** E1 · **Depende de:** fundação do canvas (módulo 03, parte E1) e `ModelProvider`.
 
 ## Ordem de tarefas
 

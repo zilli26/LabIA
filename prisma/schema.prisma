@@ -8,6 +8,30 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum AssetType {
+  IMAGE @map("image")
+  VIDEO @map("video")
+  AUDIO @map("audio")
+
+  @@map("asset_type")
+}
+
+enum AssetOrigin {
+  GENERATED @map("generated")
+  UPLOADED  @map("uploaded")
+
+  @@map("asset_origin")
+}
+
+enum GenerationStatus {
+  QUEUED  @map("queued")
+  RUNNING @map("running")
+  DONE    @map("done")
+  FAILED  @map("failed")
+
+  @@map("generation_status")
+}
+
 model Workspace {
   id        String   @id @default(cuid())
   name      String
@@ -50,6 +74,68 @@ model Flow {
   @@index([workspaceId, updatedAt])
   @@index([brandId])
   @@map("flows")
+}
+
+model Generation {
+  id               String           @id @default(cuid())
+  workspaceId      String           @map("workspace_id")
+  brandId          String?          @map("brand_id")
+  provider         String
+  model            String
+  prompt           String
+  params           Json
+  status           GenerationStatus @default(QUEUED)
+  estimatedCostUsd Decimal          @map("estimated_cost_usd") @db.Decimal(12, 6)
+  estimatedCostBrl Decimal          @map("estimated_cost_brl") @db.Decimal(12, 4)
+  actualCostUsd    Decimal?         @map("actual_cost_usd") @db.Decimal(12, 6)
+  actualCostBrl    Decimal?         @map("actual_cost_brl") @db.Decimal(12, 4)
+  queueJobId       String?          @map("queue_job_id")
+  providerJobId    String?          @map("provider_job_id")
+  flowRunId        String?          @map("flow_run_id")
+  flowNodeId       String?          @map("flow_node_id")
+  errorMessage     String?          @map("error_message")
+  result           Json?
+  assets           Asset[]
+  queuedAt         DateTime         @default(now()) @map("queued_at")
+  startedAt        DateTime?        @map("started_at")
+  completedAt      DateTime?        @map("completed_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@index([workspaceId, createdAt])
+  @@index([brandId])
+  @@index([status])
+  @@index([provider, model])
+  @@map("generations")
+}
+
+model Asset {
+  id            String      @id @default(cuid())
+  workspaceId   String      @map("workspace_id")
+  brandId       String?     @map("brand_id")
+  generationId  String?     @map("generation_id")
+  generation    Generation? @relation(fields: [generationId], references: [id], onDelete: SetNull)
+  type          AssetType
+  origin        AssetOrigin
+  url           String
+  storageBucket String      @map("storage_bucket")
+  storagePath   String      @map("storage_path")
+  contentType   String?     @map("content_type")
+  width         Int?
+  height        Int?
+  sizeBytes     Int?        @map("size_bytes")
+  prompt        String?
+  provider      String?
+  model         String?
+  tags          Json?
+  metadata      Json?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@index([workspaceId, createdAt])
+  @@index([brandId])
+  @@index([generationId])
+  @@map("assets")
 }
 
 model FlowRun {
