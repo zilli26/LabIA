@@ -72,6 +72,18 @@ Regra: o reagente é RARO — custo, ação de executar e foco. Se a tela está 
 4. Dark é o modo primário (light mode não é prioridade até E6).
 5. Na construção com Claude, usar a skill `frontend-design` para as telas.
 
+## Estrutura de navegação — app shell (fixado 2026-07-03)
+
+O LabIA é um APP com páginas, não uma tela única de canvas:
+
+- **Top bar global** (todas as páginas): wordmark LabIA à esquerda + navegação horizontal — `Início` · `Fluxos` · `Biblioteca` · itens futuros (`Copy`, `Calendário`, `Research`) visíveis porém desabilitados com tag "em breve". À direita: custo do mês (chip mono) e espaço do usuário.
+- **`/` (Início)**: dashboard de entrada — boas-vindas, últimos fluxos (cards com nome/data/custo), atalho "Novo fluxo", resumo de gasto do mês. O site NUNCA abre direto no canvas.
+- **`/fluxos`**: lista de fluxos (cards) → clicar abre `/fluxos/[id]` (o canvas).
+- **`/fluxos/[id]` (canvas)**: SEM sidebar fixa. A paleta de nós vira botão flutuante `+ Nó` no canto do canvas que abre um menu/painel leve (fecha ao adicionar). Toolbar do fluxo (nome, custo, salvar, executar) fica numa barra fina abaixo da top bar global.
+- **`/biblioteca`**: grid de assets/gerações.
+
+Racional: sidebar fixa de paleta era peso permanente para uma ação eventual (adicionar nó); navegação por funcionalidade é o que dá cara de produto.
+
 ## A fazer na E1
 
 - [x] Fixar paleta final (hex) e tipografia — v1, 2026-07-03
