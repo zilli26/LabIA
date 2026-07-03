@@ -9,9 +9,12 @@ LabIA ("laboratório" + "lábia") é a plataforma dos sonhos de um social media:
 ## Mapa de leitura obrigatória (nesta ordem)
 
 1. `docs/00-VISAO.md` — o que é, para quem, princípios inegociáveis
-2. `docs/03-ROADMAP.md` — em que etapa estamos e o que é "pronto"
-3. `docs/01-ARQUITETURA.md` — stack e como os módulos conversam
-4. A pasta do módulo em que vai trabalhar: `modulos/<nn-nome>/` — leia os 4 arquivos
+2. `docs/RETOMADA.md` — **estado vivo**: onde paramos, débitos, próxima ação
+3. `docs/03-ROADMAP.md` — em que etapa estamos e o que é "pronto"
+4. `docs/01-ARQUITETURA.md` — stack e como os módulos conversam
+5. A pasta do módulo em que vai trabalhar: `modulos/<nn-nome>/` — leia os 4 arquivos
+
+Ao encerrar uma sessão de orquestração, atualize o `docs/RETOMADA.md` (decisões mudadas + porquê, débitos, ponteiro de retomada).
 
 ## Regras inegociáveis
 
