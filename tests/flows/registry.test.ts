@@ -87,6 +87,8 @@ describe("default nodeDefinitionRegistry singleton (populated with utility nodes
     expect(getNodeDefinition("text-input")).toBeDefined();
     expect(getNodeDefinition("note")).toBeDefined();
     expect(getNodeDefinition("asset-output")).toBeDefined();
+    expect(getNodeDefinition("prompt")).toBeDefined();
+    expect(getNodeDefinition("image-generation")).toBeDefined();
   });
 
   it("returns undefined for an unregistered type via getNodeDefinition", () => {
@@ -98,6 +100,8 @@ describe("default nodeDefinitionRegistry singleton (populated with utility nodes
     const serializableTypes = listSerializableNodeDefinitions().map((d) => d.type).sort();
 
     expect(serializableTypes).toEqual(types);
-    expect(types).toEqual(["text-input", "note", "asset-output"].sort());
+    expect(types).toEqual(
+      ["text-input", "note", "asset-output", "prompt", "image-generation"].sort(),
+    );
   });
 });

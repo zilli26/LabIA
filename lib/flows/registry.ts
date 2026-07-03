@@ -2,6 +2,7 @@ import type {
   NodeDefinition,
   SerializableNodeDefinition,
 } from "@/lib/flows/types";
+import { imageNodeDefinitions } from "@/lib/flows/image-nodes";
 import { utilityNodeDefinitions } from "@/lib/flows/utility-nodes";
 
 export class NodeDefinitionRegistry {
@@ -40,7 +41,7 @@ export class NodeDefinitionRegistry {
 }
 
 export const nodeDefinitionRegistry = new NodeDefinitionRegistry(
-  utilityNodeDefinitions,
+  [...utilityNodeDefinitions, ...imageNodeDefinitions],
 );
 
 export function getNodeDefinition(type: string) {

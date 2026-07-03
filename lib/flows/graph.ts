@@ -1,12 +1,17 @@
 import type { Edge, Node, Viewport } from "@xyflow/react";
 
-export type LabNodeKind = "text-input" | "note" | "asset-output";
+export type LabNodeKind =
+  | "text-input"
+  | "note"
+  | "asset-output"
+  | "prompt"
+  | "image-generation";
 
 export type LabFlowNodeData = {
   kind: LabNodeKind;
   title: string;
   description: string;
-  status: "idle" | "ready";
+  status: "idle" | "ready" | "queued" | "running" | "done" | "failed";
   costLabel?: string;
   params?: Record<string, unknown>;
 };

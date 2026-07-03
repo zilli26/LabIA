@@ -22,6 +22,7 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
+  MessageSquareText,
   PenLine,
   Play,
   Plus,
@@ -39,6 +40,7 @@ import {
   type LabFlowNode,
   type LabNodeKind,
 } from "@/lib/flows/graph";
+import type { SerializableNodeDefinition } from "@/lib/flows/types";
 import { cn } from "@/lib/utils";
 
 type FlowRecord = {
@@ -57,6 +59,49 @@ type CostResponse = {
     total: {
       brl: number;
     };
+    nodes: Array<{
+      nodeId: string;
+      estimatedCost: {
+        brl: number;
+      };
+    }>;
+  };
+};
+
+type FlowRunResponse = {
+  flowRun: {
+    id: string;
+    status: string;
+    nodes: Array<{
+      nodeId: string;
+      type: string;
+      status: string;
+      outputs: unknown;
+      error: string | null;
+      estimatedCost: {
+        brl: number;
+      };
+      actualCost: {
+        brl: number;
+      };
+    }>;
+  };
+};
+
+type GenerationResponse = {
+  generation: {
+    id: string;
+    status: string;
+    model: string;
+    prompt: string;
+    actualCostBrl: number | null;
+    errorMessage: string | null;
+    assets: Array<{
+      id: string;
+      url: string;
+      width: number | null;
+      height: number | null;
+    }>;
   };
 };
 
@@ -64,38 +109,58 @@ const nodeTypes = {
   labNode: LabFlowNodeComponent,
 } satisfies NodeTypes;
 
-const addableNodes: Array<{
-  kind: LabNodeKind;
-  label: string;
-  description: string;
-  icon: typeof FileText;
-}> = [
+const nodeIcons: Record<LabNodeKind, typeof FileText> = {
+  "text-input": FileText,
+  prompt: MessageSquareText,
+  "image-generation": ImageIcon,
+  note: StickyNote,
+  "asset-output": UploadCloud,
+};
+
+const fallbackAddableNodes: SerializableNodeDefinition[] = [
   {
-    kind: "text-input",
+    type: "text-input",
     label: "Texto",
     description: "Briefing, prompt ou contexto.",
-    icon: FileText,
+    inputs: [],
+    outputs: [],
+    ui: { componentKey: "labNode", kind: "text-input" },
   },
   {
-    kind: "note",
+    type: "prompt",
+    label: "Prompt",
+    description: "Prompt estruturado para imagem.",
+    inputs: [],
+    outputs: [],
+    ui: { componentKey: "labNode", kind: "prompt" },
+  },
+  {
+    type: "image-generation",
+    label: "Gerar Imagem",
+    description: "Modelo fal.ai com custo visível.",
+    inputs: [],
+    outputs: [],
+    ui: { componentKey: "labNode", kind: "image-generation" },
+  },
+  {
+    type: "note",
     label: "Nota",
     description: "Anotação livre no fluxo.",
-    icon: StickyNote,
+    inputs: [],
+    outputs: [],
+    ui: { componentKey: "labNode", kind: "note" },
   },
   {
-    kind: "asset-output",
+    type: "asset-output",
     label: "Saída",
     description: "Destino do resultado.",
-    icon: UploadCloud,
+    inputs: [],
+    outputs: [],
+    ui: { componentKey: "labNode", kind: "asset-output" },
   },
 ];
 
 const upcomingNodes = [
-  {
-    label: "Gerar imagem",
-    accent: "var(--lab-node-image)",
-    icon: ImageIcon,
-  },
   {
     label: "Gerar vídeo",
     accent: "var(--lab-node-video)",
@@ -115,9 +180,29 @@ function formatBrl(value: number) {
   }).format(value);
 }
 
-function createNode(kind: LabNodeKind, position: { x: number; y: number }) {
-  const meta = addableNodes.find((node) => node.kind === kind);
-  const label = meta?.label ?? "Nó";
+function isLabNodeKind(kind: string): kind is LabNodeKind {
+  return kind in nodeIcons;
+}
+
+function getDefaultParams(kind: LabNodeKind) {
+  if (kind === "prompt") {
+    return { prompt: "" };
+  }
+
+  if (kind === "image-generation") {
+    return { model: "fal-ai/flux/dev" };
+  }
+
+  return undefined;
+}
+
+function createNode(
+  definition: SerializableNodeDefinition,
+  position: { x: number; y: number },
+) {
+  const kind = isLabNodeKind(definition.ui.kind)
+    ? definition.ui.kind
+    : "note";
   const suffix = crypto.randomUUID().slice(0, 8);
 
   return {
@@ -126,11 +211,18 @@ function createNode(kind: LabNodeKind, position: { x: number; y: number }) {
     position,
     data: {
       kind,
-      title: label,
-      description: meta?.description ?? "Nó do fluxo.",
+      title: definition.label ?? "Nó",
+      description: definition.description ?? "Nó do fluxo.",
       status: "idle",
+      params: getDefaultParams(kind),
     },
   } satisfies LabFlowNode;
+}
+
+function getRecord(value: unknown) {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function FlowCanvasInner({ flowId }: { flowId: string }) {
@@ -142,12 +234,42 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [isRunning, setIsRunning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [isNodeMenuOpen, setIsNodeMenuOpen] = useState(false);
+  const [addableNodes, setAddableNodes] = useState(fallbackAddableNodes);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
   const [costLabel, setCostLabel] = useState("~R$ 0,00");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const { fitView, getViewport, screenToFlowPosition, setViewport } =
     useReactFlow<LabFlowNode, Edge>();
+
+  useEffect(() => {
+    fetch("/api/flows/node-definitions", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { nodeDefinitions?: SerializableNodeDefinition[] } | null) => {
+        if (!payload?.nodeDefinitions) {
+          return;
+        }
+
+        setAddableNodes(
+          payload.nodeDefinitions.filter(
+            (definition) =>
+              definition.ui.componentKey === "labNode" &&
+              isLabNodeKind(definition.ui.kind),
+          ),
+        );
+      })
+      .catch(() => setAddableNodes(fallbackAddableNodes));
+  }, []);
+
+  useEffect(() => {
+    const markDirty = () => {
+      setIsDirty(true);
+      setRunMessage(null);
+    };
+
+    window.addEventListener("lab-flow-node-data-change", markDirty);
+    return () => window.removeEventListener("lab-flow-node-data-change", markDirty);
+  }, []);
 
   const estimateCost = useCallback(
     async (graph: FlowGraph) => {
@@ -167,8 +289,33 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
       const payload = (await response.json()) as CostResponse;
       setCostLabel(`~${formatBrl(payload.cost.total.brl)}`);
+      setNodes((currentNodes) => {
+        const costByNodeId = new Map(
+          payload.cost.nodes.map((node) => [node.nodeId, node.estimatedCost.brl]),
+        );
+        let changed = false;
+        const nextNodes = currentNodes.map((node) => {
+          const brl = costByNodeId.get(node.id) ?? 0;
+          const nextCostLabel = brl > 0 ? `~${formatBrl(brl)}` : undefined;
+
+          if (node.data.costLabel === nextCostLabel) {
+            return node;
+          }
+
+          changed = true;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              costLabel: nextCostLabel,
+            },
+          };
+        });
+
+        return changed ? nextNodes : currentNodes;
+      });
     },
-    [flowId],
+    [flowId, setNodes],
   );
 
   const loadFlow = useCallback(async () => {
@@ -233,6 +380,125 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     return () => window.clearTimeout(timer);
   }, [edges, estimateCost, getViewport, isLoading, nodes]);
 
+  const refreshGeneration = useCallback(
+    async (generationId: string, nodeId: string, attempt = 0) => {
+      const response = await fetch(`/api/generations/${generationId}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as GenerationResponse;
+      const asset = payload.generation.assets[0];
+
+      setNodes((currentNodes) =>
+        currentNodes.map((node) =>
+          node.id === nodeId
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  status:
+                    payload.generation.status.toLowerCase() as LabFlowNode["data"]["status"],
+                  params: {
+                    ...(node.data.params ?? {}),
+                    generationId,
+                    generationStatus: payload.generation.status.toLowerCase(),
+                    model: payload.generation.model,
+                    prompt: payload.generation.prompt,
+                    assetUrl: asset?.url,
+                    assetWidth: asset?.width,
+                    assetHeight: asset?.height,
+                    actualCostBrl: payload.generation.actualCostBrl ?? undefined,
+                    errorMessage: payload.generation.errorMessage ?? undefined,
+                  },
+                },
+              }
+            : node,
+        ),
+      );
+
+      if (
+        !["DONE", "FAILED"].includes(payload.generation.status) &&
+        attempt < 30
+      ) {
+        window.setTimeout(
+          () => void refreshGeneration(generationId, nodeId, attempt + 1),
+          2000,
+        );
+      }
+    },
+    [setNodes],
+  );
+
+  const applyRunState = useCallback(
+    (flowRun: FlowRunResponse["flowRun"]) => {
+      setNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          const runNode = flowRun.nodes.find((item) => item.nodeId === node.id);
+
+          if (!runNode) {
+            return node;
+          }
+
+          const outputs = getRecord(runNode.outputs);
+          const generationId =
+            typeof outputs.generationId === "string"
+              ? outputs.generationId
+              : undefined;
+
+          if (node.data.kind === "image-generation" && generationId) {
+            void refreshGeneration(generationId, node.id);
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              status: runNode.status as LabFlowNode["data"]["status"],
+              params: {
+                ...(node.data.params ?? {}),
+                generationId,
+                queueJobId:
+                  typeof outputs.queueJobId === "string"
+                    ? outputs.queueJobId
+                    : undefined,
+                generationStatus:
+                  node.data.kind === "image-generation" && generationId
+                    ? "queued"
+                    : undefined,
+                errorMessage: runNode.error ?? undefined,
+              },
+            },
+          };
+        }),
+      );
+    },
+    [refreshGeneration, setNodes],
+  );
+
+  const pollRun = useCallback(
+    async (runId: string, attempt = 0) => {
+      const response = await fetch(`/api/flows/${flowId}/runs/${runId}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as FlowRunResponse;
+      applyRunState(payload.flowRun);
+
+      if (!["done", "failed"].includes(payload.flowRun.status) && attempt < 20) {
+        window.setTimeout(() => void pollRun(runId, attempt + 1), 1500);
+      }
+    },
+    [applyRunState, flowId],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((currentEdges) =>
@@ -255,7 +521,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   );
 
   const handleAddNode = useCallback(
-    (kind: LabNodeKind) => {
+    (definition: SerializableNodeDefinition) => {
       const position = screenToFlowPosition({
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
@@ -263,7 +529,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
       setNodes((currentNodes) => [
         ...currentNodes,
-        createNode(kind, {
+        createNode(definition, {
           x: position.x - 128,
           y: position.y - 64,
         }),
@@ -342,9 +608,12 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       return;
     }
 
+    const payload = (await response.json()) as FlowRunResponse;
+    applyRunState(payload.flowRun);
+    void pollRun(payload.flowRun.id);
     setRunMessage("execução enfileirada");
     setIsRunning(false);
-  }, [flowId, isDirty]);
+  }, [applyRunState, flowId, isDirty, pollRun]);
 
   const isEmpty = !isLoading && nodes.length === 0;
   const statusMessage = errorMessage
@@ -469,13 +738,16 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
             <div className="mt-2 w-72 rounded-control border border-lab-border bg-lab-surface-1 p-2 shadow-none">
               <div className="grid gap-2">
                 {addableNodes.map((node) => {
-                  const Icon = node.icon;
+                  const kind = isLabNodeKind(node.ui.kind)
+                    ? node.ui.kind
+                    : "note";
+                  const Icon = nodeIcons[kind];
 
                   return (
                     <button
-                      key={node.kind}
+                      key={node.type}
                       type="button"
-                      onClick={() => handleAddNode(node.kind)}
+                      onClick={() => handleAddNode(node)}
                       className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
                     >
                       <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
@@ -534,7 +806,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
                 Todo experimento começa com um bloco. Adicione um nó de texto e
                 conecte a partir dele.
               </p>
-              <Button onClick={() => handleAddNode("text-input")}>
+              <Button onClick={() => handleAddNode(fallbackAddableNodes[0])}>
                 <Plus />
                 Adicionar nó de texto
               </Button>
