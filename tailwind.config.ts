@@ -21,6 +21,7 @@ const config: Config = {
           "text-dim": "var(--lab-text-dim)",
           "text-muted": "var(--lab-text-muted)",
           reagent: "var(--lab-reagent)",
+          "reagent-bright": "var(--lab-reagent-bright)",
           "reagent-dim": "var(--lab-reagent-dim)",
           success: "var(--lab-success)",
           warning: "var(--lab-warning)",

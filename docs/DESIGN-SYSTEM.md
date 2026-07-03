@@ -25,13 +25,14 @@
 
 | Token | Hex | Uso |
 |---|---|---|
-| `--lab-reagent` | `#A3F53C` | verde-ácido: custo, execução de fluxo, CTA primário, foco |
-| `--lab-reagent-dim` | `rgba(163,245,60,0.12)` | fundos de chip/badge de custo |
+| `--lab-reagent` | `#10B981` | esmeralda: fundo de CTA primário, execução de fluxo, foco |
+| `--lab-reagent-bright` | `#3DDFA6` | esmeralda claro: NÚMEROS DE CUSTO (mono), wordmark "IA", ícones ativos — nunca como fundo |
+| `--lab-reagent-dim` | `rgba(16,185,129,0.12)` | fundos de chip/badge de custo |
 | texto sobre reagente | `#0A0B0E` | botões primários usam texto escuro |
 
-Regra: o reagente é RARO — custo, ação de executar e foco. Se a tela está verde demais, está errada.
+Regra: o reagente é RARO — custo, ação de executar e foco. Se a tela está verde demais, está errada. O par existe porque esmeralda escuro (`reagent`) não tem contraste para texto sobre dark — texto/número verde usa SEMPRE o `bright`.
 
-> **Pendente v1.1 (pedido do Felipe, 2026-07-03):** trocar o verde-ácido por um **verde-esmeralda escuro** ("menos cara de IA" — o verde é a cor do perfil dele). Candidatos a explorar: `#10B981`/`#059669` (esmeralda) ou um tom joia mais profundo `#0E9F6E`. Desafio: esmeralda escuro tem menos contraste sobre dark — provavelmente vira par (esmeralda como cor de marca/CTA + um tom claro derivado só para números de custo em mono). Explorar com telas reais na tela de referência da E1; até lá, os hex v1 valem para não travar o Codex.
+> **v1.1 (2026-07-03):** verde-ácido `#A3F53C` substituído pelo par esmeralda acima, a pedido do Felipe ("menos cara de IA" — o ácido sobre preto é a identidade do Krea). Validado em tela real.
 
 ### Semânticas (discretas)
 

@@ -11,8 +11,9 @@
   --lab-text: #E9ECF2;
   --lab-text-dim: #9AA3B5;
   --lab-text-muted: #5D6577;
-  --lab-reagent: #A3F53C;
-  --lab-reagent-dim: rgba(163,245,60,0.12);
+  --lab-reagent: #10B981;
+  --lab-reagent-bright: #3DDFA6;
+  --lab-reagent-dim: rgba(16, 185, 129, 0.12);
   --lab-success: #4ADE80;
   --lab-warning: #FBBF24;
   --lab-danger: #FB7185;
@@ -50,11 +51,27 @@
 
 @layer components {
   .lab-wordmark {
-    @apply font-display text-xl font-bold;
+    @apply font-display text-xl font-bold tracking-tight;
   }
 
   .lab-wordmark span {
-    color: var(--lab-reagent);
+    color: var(--lab-reagent-bright);
+  }
+
+  .lab-status-dot {
+    @apply inline-block size-1.5 rounded-full;
+  }
+
+  .lab-ghost-input {
+    @apply h-8 rounded-control border border-transparent bg-transparent px-2 font-display text-sm font-medium text-lab-text transition-colors;
+  }
+
+  .lab-ghost-input:hover {
+    @apply border-lab-border bg-lab-surface-2;
+  }
+
+  .lab-ghost-input:focus {
+    @apply border-lab-border-strong bg-lab-surface-2 outline-none;
   }
 }
 
@@ -71,8 +88,10 @@
   height: 10px;
   border-color: var(--lab-bg);
   background: var(--lab-border-strong);
+  transition: background-color 120ms ease;
 }
 
+.react-flow__handle:hover,
 .react-flow__handle-connecting,
 .react-flow__handle-valid {
   background: var(--lab-reagent);
@@ -83,8 +102,14 @@
   stroke-width: 2;
 }
 
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--lab-reagent);
+}
+
 .react-flow__controls {
+  overflow: hidden;
   border: 1px solid var(--lab-border);
+  border-radius: 8px;
   background: var(--lab-surface-1);
   box-shadow: none;
 }
@@ -92,15 +117,26 @@
 .react-flow__controls-button {
   border-bottom: 1px solid var(--lab-border);
   background: var(--lab-surface-1);
-  color: var(--lab-text);
+  color: var(--lab-text-dim);
 }
 
 .react-flow__controls-button:hover {
   background: var(--lab-surface-2);
+  color: var(--lab-text);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
 }
 
 .react-flow__minimap {
   border: 1px solid var(--lab-border);
   border-radius: 8px;
   background: var(--lab-surface-1);
+  opacity: 0.85;
+}
+
+.react-flow__attribution {
+  background: transparent;
+  color: var(--lab-text-muted);
 }

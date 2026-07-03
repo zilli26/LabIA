@@ -11,7 +11,7 @@ const badgeVariants = cva(
         default:
           "border-lab-border bg-lab-surface-2 text-lab-text-dim",
         cost:
-          "border-lab-reagent/20 bg-lab-reagent-dim font-mono text-lab-reagent",
+          "border-lab-reagent/20 bg-lab-reagent-dim font-mono text-lab-reagent-bright",
       },
     },
     defaultVariants: {

@@ -7,7 +7,7 @@ export type LabFlowNodeData = {
   title: string;
   description: string;
   status: "idle" | "ready";
-  costLabel: string;
+  costLabel?: string;
 };
 
 export type LabFlowNode = Node<LabFlowNodeData, "labNode">;
@@ -29,7 +29,6 @@ export const starterFlowGraph: FlowGraph = {
         title: "Briefing",
         description: "Entrada de texto para orientar o fluxo.",
         status: "idle",
-        costLabel: "~R$0,00",
       },
     },
     {
@@ -41,7 +40,6 @@ export const starterFlowGraph: FlowGraph = {
         title: "Notas de direção",
         description: "Anotações internas para manter contexto.",
         status: "idle",
-        costLabel: "~R$0,00",
       },
     },
     {
@@ -53,7 +51,6 @@ export const starterFlowGraph: FlowGraph = {
         title: "Saída",
         description: "Destino lógico do resultado do fluxo.",
         status: "idle",
-        costLabel: "~R$0,00",
       },
     },
   ],

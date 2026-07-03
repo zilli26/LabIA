@@ -62,10 +62,10 @@ export function LabFlowNodeComponent({ data, selected }: NodeProps<LabFlowNode>)
               </div>
             </div>
           </div>
-          <Badge variant="cost">{data.costLabel}</Badge>
+          {data.costLabel ? <Badge variant="cost">{data.costLabel}</Badge> : null}
         </div>
 
-        <p className="mt-3 line-clamp-2 text-xs leading-5 text-lab-text-dim">
+        <p className="mt-3 line-clamp-2 text-xs leading-5 text-lab-text-muted">
           {data.description}
         </p>
       </div>
