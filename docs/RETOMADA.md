@@ -1,7 +1,11 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-03** (sessão Codex - worker unificado de fluxo/imagem).
+> Última atualização: **2026-07-03** (sessão Claude - PRIMEIRA IMAGEM REAL gerada; worker revisado e commitado).
+
+## Marco: primeira imagem real (2026-07-03)
+
+Fluxo Prompt -> Gerar Imagem rodou de ponta a ponta com saldo real: FlowRun `cmr5jxsi9000hvd5cgaqo09qz` -> Generation `cmr5jy3ry0000vdeczlnfbh0j` DONE, FLUX dev, custo estimado R$0,135 ANTES e custo real R$0,135 DEPOIS, asset 1024x768 no Supabase Storage, visível na `/biblioteca` com prompt recuperável. Regra nova do Felipe: **nenhum gasto de API sem aprovação explícita dele** (cartão pessoal na fal.ai). Comparação lado a lado (tarefa 6) adiada por decisão dele. Handles do canvas estavam invisíveis (Felipe não conseguia conectar nós) — corrigidos para 16px esmeralda (`710f48b`).
 
 ## Onde estamos
 
@@ -46,10 +50,10 @@
 
 ## Por onde retomar (nesta ordem)
 
-1. **Felipe: top up US$10 na fal.ai** -> rodar `npx dotenv-cli -e .env.local -- npm run smoke:image`.
-2. **Revisão integrada (Claude):** com `npm run worker` vivo + saldo, rodar fluxo Prompt -> Gerar Imagem de ponta a ponta; confirmar imagem no nó, custo real depois, asset na biblioteca, falha simulada e retry.
-3. **Tarefa 6 do módulo 01:** Nó Comparar + Nó Referência (critério "mesma prompt em 2 modelos lado a lado").
-4. Depois disso, decidir E2 (vídeo) vs. polir o momento "adeus Higgsfield".
+1. **Felipe executa pela UI:** F5 no canvas -> conectar (handles agora visíveis) -> Executar; confirmar a imagem renderizando NO NÓ (única parte ainda não vista com geração real). Lembrete: cada execução gasta (~R$0,14 FLUX dev) — só com aprovação dele.
+2. **Facilitar o uso diário:** criar `iniciar-labia.bat` (sobe `npm run dev` + `npm run worker`); especificar deploy Vercel (UI no ar; worker continua local — Vercel não roda processo permanente).
+3. **Retry visual por nó** (último critério de aceite aberto além da comparação adiada).
+4. **Decidir com o Felipe:** reabrir tarefa 6 (comparação) para fechar E1, ou declarar E1 "boa o suficiente" e ir para E2 (vídeo).
 
 ## Ambiente (para quem chegar do zero)
 

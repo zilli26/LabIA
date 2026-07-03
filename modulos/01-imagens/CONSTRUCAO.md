@@ -1,6 +1,6 @@
 # 01-Imagens - Construção
 
-**Status:** tarefas 1-5 implementadas em 2026-07-03. Canvas registra `Prompt` e `Gerar Imagem` no registry vivo, expõe ambos na paleta flutuante `+ Nó`, estima custo antes pelo `FalProvider`, enfileira geração via `enqueueImageGenerationJob` e atualiza o nó quando a `Generation` tiver asset/custo real. `/biblioteca` agora consulta `Asset` + `Generation` reais, com preview, prompt, custo real e filtros por modelo/data. Worker unificado criado em `scripts/worker.ts`: `npm run worker` registra as filas `flow-node-execution` e `image.generate` no mesmo processo. Ambiente completo: migrations aplicadas no Supabase, bucket `assets` criado, `FAL_KEY` válida. Smoke/fluxo rodam até a chamada real e param em `Exhausted balance` - **bloqueio único: adicionar crédito na conta fal.ai** (Billing). Re-rodar `npm run smoke:image` após o top-up. **Etapa:** E1. **Depende de:** fundação do canvas (módulo 03, parte E1), worker de fluxo/imagem vivo e `ModelProvider`.
+**Status:** tarefas 1-5 implementadas e **primeira imagem real gerada em 2026-07-03** (Generation `cmr5jy3ry0000vdeczlnfbh0j`, FLUX dev, custo real R$0,135 persistido, asset 1024x768 no Supabase Storage, visível na `/biblioteca` com prompt recuperável). Canvas registra `Prompt` e `Gerar Imagem` no registry vivo, estima custo antes pelo `FalProvider`, worker unificado (`npm run worker`) consome as filas `flow-node-execution` e `image.generate`. Handles do canvas corrigidos (invisíveis -> 16px esmeralda) após feedback do Felipe. Comparação lado a lado (tarefa 6) **adiada por decisão do Felipe em 2026-07-03**. **Etapa:** E1. **Depende de:** fundação do canvas (módulo 03, parte E1), worker vivo e `ModelProvider`.
 
 ## Ordem de tarefas
 
@@ -13,11 +13,11 @@
 
 ## Critérios de aceite (validação externa)
 
-- [ ] Script de smoke test gera 1 imagem real via fal.ai e imprime custo (sem UI).
-- [ ] No canvas: prompt -> gerar -> imagem aparece no nó; custo estimado visível ANTES, real DEPOIS.
-- [ ] Mesma prompt em 2 modelos -> comparação lado a lado com custos diferentes.
-- [ ] Asset aparece na biblioteca com prompt recuperável.
-- [ ] Falha simulada (chave inválida) mostra erro legível e permite retry.
+- [x] Geração real de 1 imagem via fal.ai com custo impresso — validado 2026-07-03 pelo pipeline completo (fluxo -> worker -> fal.ai -> Supabase), que cobre mais que o smoke script; custo real R$0,135 registrado na Generation.
+- [x] No canvas: prompt -> gerar -> custo estimado ANTES (R$0,135 no run) e real DEPOIS (R$0,135 na Generation/biblioteca). Pendência visual: confirmar a imagem renderizando no nó quando o Felipe executar pela UI.
+- [ ] Mesma prompt em 2 modelos -> comparação lado a lado — **adiada por decisão do Felipe (2026-07-03)**; volta antes de declarar E1 fechada ou vai para E2, a decidir.
+- [x] Asset aparece na biblioteca com prompt recuperável — validado no browser: 1 asset, FLUX.1 [dev], R$0,14, prompt completo, preview do Storage.
+- [ ] Falha simulada (chave inválida) mostra erro legível (✓ validado com `Exhausted balance` legível no nó) e permite retry (✗ botão de retry por nó pendente).
 
 ## Validação desta sessão
 
