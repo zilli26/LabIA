@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 
+import { hasDatabaseEnv } from "@/lib/db/env";
 import { prisma } from "@/lib/db/prisma";
 import { isFlowGraph, starterFlowGraph, type FlowGraph } from "@/lib/flows/graph";
 
@@ -45,6 +46,79 @@ export async function getOrCreateStarterFlow() {
       graph: starterFlowGraph as unknown as Prisma.InputJsonValue,
     },
   });
+}
+
+export async function createFlow(name = "Novo fluxo") {
+  const workspace = await ensureDefaultWorkspace();
+
+  return prisma.flow.create({
+    data: {
+      workspaceId: workspace.id,
+      name,
+      graph: starterFlowGraph as unknown as Prisma.InputJsonValue,
+    },
+  });
+}
+
+export async function getFlowById(flowId: string) {
+  return prisma.flow.findUnique({
+    where: {
+      id: flowId,
+    },
+  });
+}
+
+export async function listRecentFlows(limit = 6) {
+  if (!hasDatabaseEnv()) {
+    return [];
+  }
+
+  const workspace = await ensureDefaultWorkspace();
+
+  return prisma.flow.findMany({
+    where: {
+      workspaceId: workspace.id,
+      isTemplate: false,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+    take: limit,
+    include: {
+      runs: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          totalActualCostBrl: true,
+          totalEstimatedCostBrl: true,
+        },
+        take: 1,
+      },
+    },
+  });
+}
+
+export async function getCurrentMonthSpendBrl() {
+  if (!hasDatabaseEnv()) {
+    return 0;
+  }
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const result = await prisma.generation.aggregate({
+    where: {
+      createdAt: {
+        gte: monthStart,
+      },
+    },
+    _sum: {
+      actualCostBrl: true,
+    },
+  });
+
+  return Number(result._sum.actualCostBrl ?? 0);
 }
 
 export async function updateFlowGraph({

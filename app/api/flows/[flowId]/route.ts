@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { hasDatabaseEnv } from "@/lib/db/env";
-import { parseStoredFlowGraph, updateFlowGraph } from "@/lib/db/flows";
+import {
+  getFlowById,
+  parseStoredFlowGraph,
+  updateFlowGraph,
+} from "@/lib/db/flows";
 import { isFlowGraph } from "@/lib/flows/graph";
 import { validateFlowGraph } from "@/lib/flows/validation";
 
@@ -12,6 +16,48 @@ type RouteContext = {
     flowId: string;
   }>;
 };
+
+export async function GET(_request: NextRequest, context: RouteContext) {
+  if (!hasDatabaseEnv()) {
+    return NextResponse.json(
+      {
+        error:
+          "DATABASE_URL e DIRECT_URL não estão configuradas. Preencha .env.local e rode as migrations do Prisma.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const { flowId } = await context.params;
+
+  try {
+    const flow = await getFlowById(flowId);
+
+    if (!flow) {
+      return NextResponse.json(
+        { error: "Flow não encontrado." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      flow: {
+        ...flow,
+        graph: parseStoredFlowGraph(flow.graph),
+      },
+    });
+  } catch (error) {
+    console.error("Failed to load flow", error);
+
+    return NextResponse.json(
+      {
+        error:
+          "Não foi possível carregar o Flow. Verifique DATABASE_URL/DIRECT_URL e rode as migrations do Prisma.",
+      },
+      { status: 503 },
+    );
+  }
+}
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   if (!hasDatabaseEnv()) {

@@ -23,6 +23,7 @@ import {
   Image as ImageIcon,
   Loader2,
   PenLine,
+  Play,
   Plus,
   Save,
   StickyNote,
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 
 import { LabFlowNodeComponent } from "@/components/nodes/lab-flow-node";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   starterFlowGraph,
@@ -48,6 +50,14 @@ type FlowRecord = {
 
 type FlowResponse = {
   flow: FlowRecord;
+};
+
+type CostResponse = {
+  cost: {
+    total: {
+      brl: number;
+    };
+  };
 };
 
 const nodeTypes = {
@@ -98,6 +108,13 @@ const upcomingNodes = [
   },
 ];
 
+function formatBrl(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+}
+
 function createNode(kind: LabNodeKind, position: { x: number; y: number }) {
   const meta = addableNodes.find((node) => node.kind === kind);
   const label = meta?.label ?? "Nó";
@@ -116,24 +133,49 @@ function createNode(kind: LabNodeKind, position: { x: number; y: number }) {
   } satisfies LabFlowNode;
 }
 
-function FlowCanvasInner() {
+function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<LabFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [flowId, setFlowId] = useState<string | null>(null);
   const [flowName, setFlowName] = useState("Novo experimento");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [isNodeMenuOpen, setIsNodeMenuOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [runMessage, setRunMessage] = useState<string | null>(null);
+  const [costLabel, setCostLabel] = useState("~R$ 0,00");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const { fitView, getViewport, screenToFlowPosition, setViewport } =
     useReactFlow<LabFlowNode, Edge>();
+
+  const estimateCost = useCallback(
+    async (graph: FlowGraph) => {
+      const response = await fetch(`/api/flows/${flowId}/cost`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          graph,
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as CostResponse;
+      setCostLabel(`~${formatBrl(payload.cost.total.brl)}`);
+    },
+    [flowId],
+  );
 
   const loadFlow = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
 
-    const response = await fetch("/api/flows", {
+    const response = await fetch(`/api/flows/${flowId}`, {
       cache: "no-store",
     });
 
@@ -145,7 +187,6 @@ function FlowCanvasInner() {
     const payload = (await response.json()) as FlowResponse;
     const graph = payload.flow.graph;
 
-    setFlowId(payload.flow.id);
     setFlowName(payload.flow.name);
     setNodes(graph.nodes);
     setEdges(graph.edges);
@@ -156,6 +197,7 @@ function FlowCanvasInner() {
         minute: "2-digit",
       }),
     );
+    void estimateCost(graph);
 
     if (graph.viewport) {
       setViewport(graph.viewport);
@@ -164,7 +206,7 @@ function FlowCanvasInner() {
     }
 
     setIsLoading(false);
-  }, [fitView, setEdges, setNodes, setViewport]);
+  }, [estimateCost, fitView, flowId, setEdges, setNodes, setViewport]);
 
   useEffect(() => {
     loadFlow().catch((error: Error) => {
@@ -174,6 +216,22 @@ function FlowCanvasInner() {
       setIsLoading(false);
     });
   }, [loadFlow, setEdges, setNodes]);
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void estimateCost({
+        nodes,
+        edges,
+        viewport: getViewport(),
+      });
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [edges, estimateCost, getViewport, isLoading, nodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -191,6 +249,7 @@ function FlowCanvasInner() {
         ),
       );
       setIsDirty(true);
+      setRunMessage(null);
     },
     [setEdges],
   );
@@ -210,18 +269,16 @@ function FlowCanvasInner() {
         }),
       ]);
       setIsDirty(true);
+      setRunMessage(null);
+      setIsNodeMenuOpen(false);
     },
     [screenToFlowPosition, setNodes],
   );
 
   const handleSave = useCallback(async () => {
-    if (!flowId) {
-      setErrorMessage("Conecte o banco para salvar (veja .env.example).");
-      return;
-    }
-
     setIsSaving(true);
     setErrorMessage(null);
+    setRunMessage(null);
 
     const graph: FlowGraph = {
       nodes,
@@ -256,32 +313,69 @@ function FlowCanvasInner() {
         minute: "2-digit",
       }),
     );
+    void estimateCost(graph);
     setIsSaving(false);
-  }, [edges, flowId, flowName, getViewport, nodes]);
+  }, [edges, estimateCost, flowId, flowName, getViewport, nodes]);
+
+  const handleRun = useCallback(async () => {
+    if (isDirty) {
+      setErrorMessage("Salve o fluxo antes de executar.");
+      return;
+    }
+
+    setIsRunning(true);
+    setErrorMessage(null);
+    setRunMessage(null);
+
+    const response = await fetch(`/api/flows/${flowId}/runs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      setErrorMessage(payload.error ?? "Não foi possível executar o fluxo.");
+      setIsRunning(false);
+      return;
+    }
+
+    setRunMessage("execução enfileirada");
+    setIsRunning(false);
+  }, [flowId, isDirty]);
 
   const isEmpty = !isLoading && nodes.length === 0;
+  const statusMessage = errorMessage
+    ? errorMessage
+    : runMessage
+      ? runMessage
+      : isDirty
+        ? "alterações não salvas"
+        : lastSavedAt
+          ? `salvo às ${lastSavedAt}`
+          : "pronto";
 
   return (
-    <main className="flex h-screen min-h-0 flex-col overflow-hidden bg-lab-bg text-lab-text">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-lab-border bg-lab-surface-1 px-4">
+    <main className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden bg-lab-bg text-lab-text">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-lab-border bg-lab-surface-1 px-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="lab-wordmark shrink-0">
-            Lab<span>IA</span>
-          </div>
-          <div className="h-6 w-px bg-lab-border" />
           <input
             aria-label="Nome do fluxo"
             value={flowName}
             onChange={(event) => {
               setFlowName(event.target.value);
               setIsDirty(true);
+              setRunMessage(null);
             }}
-            className="lab-ghost-input w-56"
+            className="lab-ghost-input w-64 max-w-[52vw]"
           />
+          <Badge variant="cost">{costLabel}</Badge>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden items-center gap-2 font-mono text-xs sm:flex">
+        <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-2 font-mono text-xs md:flex">
             <span
               className={cn(
                 "lab-status-dot",
@@ -297,13 +391,7 @@ function FlowCanvasInner() {
                 errorMessage ? "text-lab-danger" : "text-lab-text-muted",
               )}
             >
-              {errorMessage
-                ? errorMessage
-                : isDirty
-                  ? "alterações não salvas"
-                  : lastSavedAt
-                    ? `salvo às ${lastSavedAt}`
-                    : "pronto"}
+              {statusMessage}
             </span>
           </div>
           <Button
@@ -314,162 +402,163 @@ function FlowCanvasInner() {
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             Salvar
           </Button>
+          <Button
+            onClick={handleRun}
+            disabled={isRunning || isLoading}
+            variant="secondary"
+          >
+            {isRunning ? <Loader2 className="animate-spin" /> : <Play />}
+            Executar
+          </Button>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="flex w-72 shrink-0 flex-col border-r border-lab-border bg-lab-surface-1">
-          <div className="p-4 pb-2">
-            <div className="font-display text-sm font-semibold">
-              Adicionar nós
-            </div>
-            <div className="mt-1 text-xs text-lab-text-dim">
-              Monte o experimento conectando blocos.
-            </div>
-          </div>
+      <section className="relative min-h-0 flex-1">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          colorMode="dark"
+          onNodesChange={(changes) => {
+            onNodesChange(changes);
+            if (changes.some((change) => change.type !== "select")) {
+              setIsDirty(true);
+              setRunMessage(null);
+            }
+          }}
+          onEdgesChange={(changes) => {
+            onEdgesChange(changes);
+            if (changes.some((change) => change.type !== "select")) {
+              setIsDirty(true);
+              setRunMessage(null);
+            }
+          }}
+          onConnect={onConnect}
+          fitView
+          fitViewOptions={{ padding: 0.18 }}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={16}
+            size={1}
+            color="var(--lab-canvas-dot)"
+          />
+          <MiniMap
+            pannable
+            zoomable
+            className="!h-28 !w-44"
+            nodeColor="var(--lab-surface-2)"
+            nodeStrokeColor="var(--lab-border-strong)"
+            maskColor="var(--lab-canvas-mask)"
+          />
+          <Controls position="bottom-right" showInteractive={false} />
+        </ReactFlow>
 
-          <div className="grid gap-2 p-3">
-            {addableNodes.map((node) => {
-              const Icon = node.icon;
-
-              return (
-                <button
-                  key={node.kind}
-                  type="button"
-                  onClick={() => handleAddNode(node.kind)}
-                  className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-lab-text">
-                      {node.label}
-                    </span>
-                    <span className="block truncate text-xs text-lab-text-muted">
-                      {node.description}
-                    </span>
-                  </span>
-                  <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="px-4 pb-2 pt-3">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-lab-text-muted">
-              Em breve no laboratório
-            </div>
-          </div>
-
-          <div className="grid gap-1.5 px-3">
-            {upcomingNodes.map((node) => {
-              const Icon = node.icon;
-
-              return (
-                <div
-                  key={node.label}
-                  className="flex items-center gap-3 rounded-control border border-dashed border-lab-border/70 p-2.5 opacity-60"
-                >
-                  <span
-                    className="flex size-8 shrink-0 items-center justify-center rounded-control bg-lab-surface-2"
-                    style={{ color: node.accent }}
-                  >
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="text-sm text-lab-text-dim">
-                    {node.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-auto flex items-center justify-between border-t border-lab-border p-4">
-            <span className="font-mono text-[11px] text-lab-text-muted">
-              LabIA · etapa 1
-            </span>
-            <span className="font-mono text-[11px] text-lab-text-muted">
-              {nodes.length} {nodes.length === 1 ? "nó" : "nós"}
-            </span>
-          </div>
-        </aside>
-
-        <section className="relative min-w-0 flex-1">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            colorMode="dark"
-            onNodesChange={(changes) => {
-              onNodesChange(changes);
-              if (changes.some((change) => change.type !== "select")) {
-                setIsDirty(true);
-              }
-            }}
-            onEdgesChange={(changes) => {
-              onEdgesChange(changes);
-              if (changes.some((change) => change.type !== "select")) {
-                setIsDirty(true);
-              }
-            }}
-            onConnect={onConnect}
-            fitView
-            fitViewOptions={{ padding: 0.18 }}
+        <div className="absolute left-4 top-4 z-20">
+          <Button
+            type="button"
+            onClick={() => setIsNodeMenuOpen((current) => !current)}
+            aria-expanded={isNodeMenuOpen}
+            variant="secondary"
           >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={16}
-              size={1}
-              color="var(--lab-canvas-dot)"
-            />
-            <MiniMap
-              pannable
-              zoomable
-              className="!h-28 !w-44"
-              nodeColor="var(--lab-surface-2)"
-              nodeStrokeColor="var(--lab-border-strong)"
-              maskColor="rgba(10, 11, 14, 0.72)"
-            />
-            <Controls position="bottom-right" showInteractive={false} />
-          </ReactFlow>
+            <Plus />
+            Nó
+          </Button>
 
-          {isEmpty ? (
-            <div className="pointer-events-none absolute inset-0 grid place-items-center">
-              <div className="pointer-events-auto flex max-w-sm flex-col items-center gap-3 rounded-lab border border-lab-border bg-lab-surface-1/90 p-6 text-center">
-                <div className="font-display text-base font-semibold">
-                  Canvas vazio
-                </div>
-                <p className="text-sm text-lab-text-dim">
-                  Todo experimento começa com um bloco. Adicione um nó de texto
-                  e conecte a partir dele.
-                </p>
-                <Button onClick={() => handleAddNode("text-input")}>
-                  <Plus />
-                  Adicionar nó de texto
-                </Button>
+          {isNodeMenuOpen ? (
+            <div className="mt-2 w-72 rounded-control border border-lab-border bg-lab-surface-1 p-2 shadow-none">
+              <div className="grid gap-2">
+                {addableNodes.map((node) => {
+                  const Icon = node.icon;
+
+                  return (
+                    <button
+                      key={node.kind}
+                      type="button"
+                      onClick={() => handleAddNode(node.kind)}
+                      className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
+                        <Icon className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-lab-text">
+                          {node.label}
+                        </span>
+                        <span className="block truncate text-xs text-lab-text-muted">
+                          {node.description}
+                        </span>
+                      </span>
+                      <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="px-2 pb-2 pt-4 text-[11px] font-medium uppercase tracking-wider text-lab-text-muted">
+                Em breve
+              </div>
+              <div className="grid gap-1.5">
+                {upcomingNodes.map((node) => {
+                  const Icon = node.icon;
+
+                  return (
+                    <div
+                      key={node.label}
+                      className="flex items-center gap-3 rounded-control border border-dashed border-lab-border/70 p-2.5 opacity-60"
+                    >
+                      <span
+                        className="flex size-8 shrink-0 items-center justify-center rounded-control bg-lab-surface-2"
+                        style={{ color: node.accent }}
+                      >
+                        <Icon className="size-4" />
+                      </span>
+                      <span className="text-sm text-lab-text-dim">
+                        {node.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}
+        </div>
 
-          {isLoading ? (
-            <div className="absolute inset-0 grid place-items-center bg-lab-bg/70">
-              <div className="flex items-center gap-2 rounded-control border border-lab-border bg-lab-surface-1 px-3 py-2 text-sm text-lab-text-dim">
-                <Loader2 className="size-4 animate-spin text-lab-reagent-bright" />
-                Preparando o laboratório
+        {isEmpty ? (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center">
+            <div className="pointer-events-auto flex max-w-sm flex-col items-center gap-3 rounded-control border border-lab-border bg-lab-surface-1/90 p-6 text-center">
+              <div className="font-display text-base font-semibold">
+                Canvas vazio
               </div>
+              <p className="text-sm text-lab-text-dim">
+                Todo experimento começa com um bloco. Adicione um nó de texto e
+                conecte a partir dele.
+              </p>
+              <Button onClick={() => handleAddNode("text-input")}>
+                <Plus />
+                Adicionar nó de texto
+              </Button>
             </div>
-          ) : null}
-        </section>
-      </div>
+          </div>
+        ) : null}
+
+        {isLoading ? (
+          <div className="absolute inset-0 grid place-items-center bg-lab-bg/70">
+            <div className="flex items-center gap-2 rounded-control border border-lab-border bg-lab-surface-1 px-3 py-2 text-sm text-lab-text-dim">
+              <Loader2 className="size-4 animate-spin text-lab-reagent-bright" />
+              Preparando o laboratório
+            </div>
+          </div>
+        ) : null}
+      </section>
     </main>
   );
 }
 
-export function FlowCanvas() {
+export function FlowCanvas({ flowId }: { flowId: string }) {
   return (
     <ReactFlowProvider>
-      <FlowCanvasInner />
+      <FlowCanvasInner flowId={flowId} />
     </ReactFlowProvider>
   );
 }

@@ -1,6 +1,6 @@
 # 03-Fluxos — Construção
 
-**Status:** E1 aberta; tarefas 1-5 implementadas em 2026-07-03 (execução/custos prontos no backend; validação end-to-end em Postgres depende de `DATABASE_URL`/`DIRECT_URL` reais e worker pg-boss ativo) · **Etapa:** E1 (canvas+motor), E2 (templates), E3 (Video Director) · **Depende de:** nada (é a fundação — primeira coisa da E1 junto com ModelProvider).
+**Status:** E1 aberta; tarefas 1-5 implementadas em 2026-07-03 (execução/custos prontos no backend; validação end-to-end em Postgres depende de `DATABASE_URL`/`DIRECT_URL` reais e worker pg-boss ativo); app shell global implementado em 2026-07-03 com dashboard em `/`, lista em `/fluxos` e canvas em `/fluxos/[id]` sem sidebar fixa · **Etapa:** E1 (canvas+motor), E2 (templates), E3 (Video Director) · **Depende de:** nada (é a fundação — primeira coisa da E1 junto com ModelProvider).
 
 ## Ordem de tarefas (E1)
 
@@ -20,6 +20,7 @@
 - 2026-07-03: registry central de `NodeDefinition` em `lib/flows/`, endpoints de definição/validação, bloqueio de grafo inválido no save e validação de portas `text | image | video | copy | brand | any`.
 - 2026-07-03: `FlowRun`/`FlowRunNode`, ordenação topológica, enfileiramento pg-boss, helper de worker local, estados por nó persistidos em tabelas assináveis via Supabase Realtime.
 - 2026-07-03: custo acumulado estimado/real por nó e por fluxo, endpoint de estimativa antes da execução e serialização de custo para a UI. Validação real de execução ainda requer banco Supabase/Postgres configurado e worker importando `registerDefaultFlowWorker()`.
+- 2026-07-03: app reestruturado para o shell fixado no DESIGN-SYSTEM: top bar global com `Início`/`Fluxos`/`Biblioteca`, dashboard em `/`, cards de fluxos em `/fluxos`, canvas em `/fluxos/[id]` e paleta de nós como botão flutuante `+ Nó` dentro do canvas.
 
 (Templates: E2 · Video Director: E3 — tarefas detalhadas quando as etapas abrirem.)
 
