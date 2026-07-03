@@ -25,7 +25,7 @@
 
 ## Critérios de aceite (E1, validação externa)
 
-- [ ] Criar fluxo com 3 nós, salvar, recarregar a página e reabrir intacto.
+- [x] Criar fluxo com 3 nós, salvar, recarregar a página e reabrir intacto. *(2026-07-03, validado por Claude contra o Postgres real do Supabase: save com nó novo + rename → reload intacto, 4 nós.)*
 - [ ] Executar fluxo e ver estados mudando em tempo real sem refresh.
 - [ ] Fechar o browser durante execução; reabrir e ver o fluxo concluído.
 - [ ] Conexão de tipos incompatíveis é bloqueada com feedback visual.

@@ -1,6 +1,6 @@
 # 01-Imagens — Construção
 
-**Status:** tarefas 1-3 implementadas em 2026-07-03; validação local passou em Prisma validate, typecheck e lint. Smoke script criado e executado até a estimativa de custo; geração real pendente porque este clone não tem `FAL_KEY`/Supabase em `.env.local`. · **Etapa:** E1 · **Depende de:** fundação do canvas (módulo 03, parte E1) e `ModelProvider`.
+**Status:** tarefas 1-3 implementadas em 2026-07-03. Ambiente completo: migrations aplicadas no Supabase, bucket `assets` criado, `FAL_KEY` válida. Smoke test roda até a chamada real e para em `Exhausted balance` — **bloqueio único: adicionar crédito na conta fal.ai** (Billing). Re-rodar `npm run smoke:image` após o top-up. · **Etapa:** E1 · **Depende de:** fundação do canvas (módulo 03, parte E1) e `ModelProvider`.
 
 ## Ordem de tarefas
 
