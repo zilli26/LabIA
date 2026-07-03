@@ -14,6 +14,7 @@ model Workspace {
   slug      String   @unique
   brands    Brand[]
   flows     Flow[]
+  flowRuns  FlowRun[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -42,10 +43,66 @@ model Flow {
   name        String
   isTemplate  Boolean   @default(false) @map("is_template")
   graph       Json
+  runs        FlowRun[]
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([workspaceId, updatedAt])
   @@index([brandId])
   @@map("flows")
+}
+
+model FlowRun {
+  id                    String        @id @default(cuid())
+  workspaceId           String        @map("workspace_id")
+  workspace             Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flowId                String        @map("flow_id")
+  flow                  Flow          @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  status                String        @default("queued")
+  graph                 Json
+  nodeOrder             Json          @map("node_order")
+  targetNodeId          String?       @map("target_node_id")
+  totalEstimatedCostUsd Decimal       @default(0) @map("total_estimated_cost_usd") @db.Decimal(12, 6)
+  totalEstimatedCostBrl Decimal       @default(0) @map("total_estimated_cost_brl") @db.Decimal(12, 6)
+  totalActualCostUsd    Decimal       @default(0) @map("total_actual_cost_usd") @db.Decimal(12, 6)
+  totalActualCostBrl    Decimal       @default(0) @map("total_actual_cost_brl") @db.Decimal(12, 6)
+  outputs               Json?
+  error                 String?
+  startedAt             DateTime?     @map("started_at")
+  completedAt           DateTime?     @map("completed_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  nodes                 FlowRunNode[]
+
+  @@index([workspaceId, status])
+  @@index([flowId, createdAt])
+  @@map("flow_runs")
+}
+
+model FlowRunNode {
+  id                  String   @id @default(cuid())
+  flowRunId           String   @map("flow_run_id")
+  flowRun             FlowRun  @relation(fields: [flowRunId], references: [id], onDelete: Cascade)
+  nodeId              String   @map("node_id")
+  type                String
+  sequence            Int
+  status              String   @default("waiting")
+  dependencyNodeIds   Json     @map("dependency_node_ids")
+  params              Json?
+  inputs              Json?
+  outputs             Json?
+  error               String?
+  pgBossJobId         String?  @map("pg_boss_job_id")
+  estimatedCostUsd    Decimal  @default(0) @map("estimated_cost_usd") @db.Decimal(12, 6)
+  estimatedCostBrl    Decimal  @default(0) @map("estimated_cost_brl") @db.Decimal(12, 6)
+  actualCostUsd       Decimal  @default(0) @map("actual_cost_usd") @db.Decimal(12, 6)
+  actualCostBrl       Decimal  @default(0) @map("actual_cost_brl") @db.Decimal(12, 6)
+  startedAt           DateTime? @map("started_at")
+  completedAt         DateTime? @map("completed_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@unique([flowRunId, nodeId])
+  @@index([flowRunId, status])
+  @@map("flow_run_nodes")
 }

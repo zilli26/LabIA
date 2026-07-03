@@ -79,4 +79,7 @@ export type FlowValidationResult = {
 export const zeroCost: CostEstimate = {
   usd: 0,
   brl: 0,
+  usdBrlRate: 0,
+  lineItems: [],
+  source: "flow",
 };
