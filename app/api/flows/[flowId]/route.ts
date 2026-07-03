@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasDatabaseEnv } from "@/lib/db/env";
 import { parseStoredFlowGraph, updateFlowGraph } from "@/lib/db/flows";
 import { isFlowGraph } from "@/lib/flows/graph";
+import { validateFlowGraph } from "@/lib/flows/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (!isFlowGraph(body.graph)) {
     return NextResponse.json(
       { error: "Grafo do fluxo inválido." },
+      { status: 400 },
+    );
+  }
+
+  const validation = validateFlowGraph(body.graph);
+
+  if (!validation.valid) {
+    return NextResponse.json(
+      {
+        error: "Grafo do fluxo possui conexões inválidas.",
+        validation,
+      },
       { status: 400 },
     );
   }

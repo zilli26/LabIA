@@ -8,6 +8,7 @@ export type LabFlowNodeData = {
   description: string;
   status: "idle" | "ready";
   costLabel?: string;
+  params?: Record<string, unknown>;
 };
 
 export type LabFlowNode = Node<LabFlowNodeData, "labNode">;
