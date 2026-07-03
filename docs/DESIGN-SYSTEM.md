@@ -31,6 +31,8 @@
 
 Regra: o reagente é RARO — custo, ação de executar e foco. Se a tela está verde demais, está errada.
 
+> **Pendente v1.1 (pedido do Felipe, 2026-07-03):** trocar o verde-ácido por um **verde-esmeralda escuro** ("menos cara de IA" — o verde é a cor do perfil dele). Candidatos a explorar: `#10B981`/`#059669` (esmeralda) ou um tom joia mais profundo `#0E9F6E`. Desafio: esmeralda escuro tem menos contraste sobre dark — provavelmente vira par (esmeralda como cor de marca/CTA + um tom claro derivado só para números de custo em mono). Explorar com telas reais na tela de referência da E1; até lá, os hex v1 valem para não travar o Codex.
+
 ### Semânticas (discretas)
 
 `--lab-success #4ADE80` · `--lab-warning #FBBF24` · `--lab-danger #FB7185` · `--lab-info #38BDF8`
