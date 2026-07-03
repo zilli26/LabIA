@@ -48,6 +48,10 @@ Fluxo Prompt -> Gerar Imagem rodou de ponta a ponta com saldo real: FlowRun `cmr
 - `npm run lint` -> limpo.
 - `npm run typecheck` -> limpo.
 
+## Deploy Vercel (2026-07-03)
+
+Site em produção: `https://labia-zilli26s-projects.vercel.app` (projeto `labia`, conta `zilli26`, deploy via CLI, 9 env vars de produção configuradas). **Pendência: Deployment Protection ativa por padrão** — Felipe precisa desativar em Settings -> Deployment Protection -> Vercel Authentication -> Disabled. Worker continua local (`npm run worker` ou `iniciar-labia.bat`); o site na nuvem enfileira no mesmo Postgres/Supabase, então geração só processa com o worker ligado na máquina do Felipe. `iniciar-labia.bat` criado na raiz: sobe dev + worker e abre o browser.
+
 ## Por onde retomar (nesta ordem)
 
 1. **Felipe executa pela UI:** F5 no canvas -> conectar (handles agora visíveis) -> Executar; confirmar a imagem renderizando NO NÓ (única parte ainda não vista com geração real). Lembrete: cada execução gasta (~R$0,14 FLUX dev) — só com aprovação dele.
