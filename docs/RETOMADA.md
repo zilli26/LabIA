@@ -1,7 +1,35 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04** (P8 executada por Codex; P9 também consta como executada; side quest de fluxos/templates segue aguardando aprovação do Felipe para virar spec construível).
+> Última atualização: **2026-07-04, fim de sessão de orquestração Claude** — E2 tarefas 0-4 prontas e revisadas; P8/P9 executadas, APROVADAS pelo Felipe e aplicadas nas specs (nota: a side quest NÃO está mais pendente — a linha anterior deste header, escrita pelo Codex, estava desatualizada).
+
+## FIM DE SESSÃO (2026-07-04) — por onde retomar
+
+1. **Tarefa 5 da E2 — Nó Estender Vídeo** (frame-chaining com `extractLastFrame` + contexto de cena pela aresta + aviso no 6º encadeamento). Claude gera o prompt do Codex na próxima sessão. ATENÇÃO ao caso-limite registrado abaixo (mix em vídeo sem áudio) ao especificar a tarefa 6.
+2. Depois: tarefa 6 (Montagem), 7 (modal de custo total — a trava de gasto do produto), 8 (retry por nó).
+3. Então: escada de gerações reais (1 clipe Wan ~R$1,35 → emenda em beat → 30s+ ~R$8,24), cada degrau com aprovação do Felipe NA HORA; resultados alimentam o log do `TECNICAS.md`.
+4. Paralelo aprovado: tarefas candidatas T1–T6 de templates/didática no `modulos/03-fluxos/CONSTRUCAO.md` (T1 "Revisar/Escolher" pode adiantar para a E2); Whitepaper v1 no fechamento da E2.
+5. Regra viva: nenhuma geração paga sem ok explícito do Felipe com custo em R$ declarado antes; Codex nunca roda geração real; revisão sempre com validação externa (rodar suíte, browser, banco — nunca aceitar auto-declaração).
+
+### Revisão Claude das tarefas 3-4 (2026-07-04) — APROVADAS e commitadas
+
+Validação externa independente: lint, typecheck e **84 testes** re-executados pelo revisor (verdes; os 5 de ffmpeg processam clipes sintéticos reais `testsrc`+`sine` — validação de vídeo de verdade, custo R$0). API viva conferida com dev server sem worker: `/api/flows/node-definitions` serve `text2video -> Texto para Vídeo`. Banco re-verificado via Prisma: **0 Generations de vídeo, 0 jobs pendentes**. Código inspecionado: `ffmpeg-service.ts` usa spawn com array (sem injeção de shell), timeout com kill, stderr resumido, concat com re-encode justificado em comentário.
+
+**Caso-limite registrado para a tarefa 6 (Montagem):** `mixAudioTrack` assume que o vídeo TEM faixa de áudio (`[0:a]` no filter_complex) — clipes de Wan/Kling nascem MUDOS e o mix falharia neles. O prompt da tarefa 6 deve exigir tratamento de vídeo sem trilha própria (ex.: `anullsrc` como fallback ou detecção prévia de faixa). Não é bug das tarefas 3-4 (contrato pedia mix sobre áudio existente).
+
+## E2 tarefas 3-4 concluídas — `Text2Video` + serviço ffmpeg local (2026-07-04, Codex)
+
+Implementação das tarefas 3 e 4 do módulo `02-videos` concluída sem chamar fal.ai, sem worker e sem execução de fluxo de vídeo. Saídas:
+
+- `lib/flows/video-nodes.ts`: criado o `NodeDefinition` `text2video`/`Texto para Vídeo`, com input text opcional, output video, prompt vindo de nó Prompt/texto ou campo do nó, custo via `FalProvider` e enqueue em `video.generate` sem `image_url`. O provider continua responsável por rotear para endpoint `text-to-video`.
+- `components/nodes/lab-flow-node.tsx`, `lib/flows/graph.ts` e `app/(studio)/fluxos/flow-canvas.tsx`: kind `text2video` registrado no canvas/paleta, usando o mesmo componente de controles do `Gerar Vídeo`, sem campo de imagem de entrada e com chip de custo em R$ pelo fluxo.
+- `lib/video/ffmpeg-service.ts`: serviço interno com `ffmpeg-static` + `spawn` por array de args, sem shell string; funções `extractLastFrame`, `concatClips` e `mixAudioTrack`; timeout default 5min e erros de ffmpeg resumidos.
+- `tests/video/ffmpeg-service.test.ts`: validação externa local com clipes sintéticos `testsrc` + `sine`, cobrindo PNG do último frame com dimensões, concat com duração aproximada e áudio, mix preservando duração e áudio, arquivo inexistente e vídeo corrompido.
+- Decisões registradas em `modulos/02-videos/decisoes.md`: Text2Video sem duplicar lógica de provider, concat com re-encode seguro, e uso exclusivo do binário local `ffmpeg-static`.
+
+Validação parcial já feita nesta sessão: `npx vitest run tests/flows/video-nodes.test.ts tests/flows/registry.test.ts tests/video/ffmpeg-service.test.ts` -> 26 testes verdes. Antes de entregar, ainda rodar lint/typecheck/testes completos, preview sem worker e count de Generations/jobs de vídeo.
+
+Próxima ação: tarefa 5 da E2 (`Nó Estender Vídeo`), usando `extractLastFrame` como base do frame-chaining.
 
 ## P8 executada — Anatomia e didática de fluxos de produção (2026-07-04, Codex)
 

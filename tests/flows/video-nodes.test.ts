@@ -24,9 +24,12 @@ import { videoNodeDefinitions } from "@/lib/flows/video-nodes";
 const videoDefinition = videoNodeDefinitions.find(
   (definition) => definition.type === "video-generation",
 );
+const text2VideoDefinition = videoNodeDefinitions.find(
+  (definition) => definition.type === "text2video",
+);
 
-if (!videoDefinition) {
-  throw new Error("video-generation definition missing in test setup.");
+if (!videoDefinition || !text2VideoDefinition) {
+  throw new Error("video node definitions missing in test setup.");
 }
 
 const estimatedCost = {
@@ -204,6 +207,100 @@ describe("video-generation node", () => {
         }),
       ),
     ).rejects.toThrow(/Tempo esgotado aguardando a imagem.*Vídeo não enfileirado/);
+
+    expect(mockEnqueueVideoGenerationJob).not.toHaveBeenCalled();
+  });
+});
+
+describe("text2video node", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockPrisma.generation.findUnique.mockReset();
+    mockEnqueueVideoGenerationJob.mockReset();
+    mockEnqueueVideoGenerationJob.mockResolvedValue({
+      generationId: "text-video-generation-id",
+      queueJobId: "text-video-queue-job-id",
+      estimatedCost,
+    });
+  });
+
+  it("delegates estimateCost to FalProvider without image_url", () => {
+    const spy = vi
+      .spyOn(FalProvider.prototype, "estimateCost")
+      .mockReturnValue(estimatedCost);
+
+    const result = text2VideoDefinition.estimateCost({
+      nodeId: "text2video-node",
+      params: {
+        model: "fal-ai/wan-25-preview/image-to-video",
+        prompt: "produto girando em luz suave",
+        duration: "5",
+        resolution: "480p",
+      },
+      inputs: {},
+    });
+
+    expect(result).toBe(estimatedCost);
+    expect(spy).toHaveBeenCalledWith(
+      "fal-ai/wan-25-preview/image-to-video",
+      expect.not.objectContaining({
+        image_url: expect.anything(),
+      }),
+    );
+  });
+
+  it("enqueues video with the prompt from the connected text input", async () => {
+    const result = await text2VideoDefinition.execute(
+      makeContext({
+        nodeId: "text2video-node",
+        params: {
+          model: "fal-ai/wan-25-preview/image-to-video",
+          prompt: "",
+          duration: "5",
+          resolution: "480p",
+        },
+        inputs: {
+          input: {
+            prompt: "câmera orbita o produto em ritmo lento",
+          },
+        },
+      }),
+    );
+
+    expect(mockPrisma.generation.findUnique).not.toHaveBeenCalled();
+    expect(mockEnqueueVideoGenerationJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "workspace",
+        model: "fal-ai/wan-25-preview/image-to-video",
+        prompt: "câmera orbita o produto em ritmo lento",
+        params: expect.not.objectContaining({
+          image_url: expect.anything(),
+        }),
+      }),
+    );
+    expect(result.outputs.output).toMatchObject({
+      generationId: "text-video-generation-id",
+      status: "queued",
+      model: "fal-ai/wan-25-preview/image-to-video",
+      estimatedCost,
+    });
+  });
+
+  it("fails readably and does not enqueue without a prompt", async () => {
+    await expect(
+      text2VideoDefinition.execute(
+        makeContext({
+          nodeId: "text2video-node",
+          params: {
+            model: "fal-ai/wan-25-preview/image-to-video",
+            prompt: "",
+            duration: "5",
+            resolution: "480p",
+          },
+          inputs: {},
+        }),
+      ),
+    ).rejects.toThrow(/Prompt obrigatório para gerar vídeo a partir de texto/);
 
     expect(mockEnqueueVideoGenerationJob).not.toHaveBeenCalled();
   });

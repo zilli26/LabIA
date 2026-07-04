@@ -114,6 +114,7 @@ const nodeIcons: Record<LabNodeKind, typeof FileText> = {
   prompt: MessageSquareText,
   "image-generation": ImageIcon,
   "video-generation": Clapperboard,
+  text2video: Clapperboard,
   note: StickyNote,
   "asset-output": UploadCloud,
 };
@@ -190,6 +191,15 @@ function getDefaultParams(kind: LabNodeKind) {
   }
 
   if (kind === "video-generation") {
+    return {
+      model: "fal-ai/wan-25-preview/image-to-video",
+      prompt: "",
+      duration: "5",
+      resolution: "1080p",
+    };
+  }
+
+  if (kind === "text2video") {
     return {
       model: "fal-ai/wan-25-preview/image-to-video",
       prompt: "",
@@ -456,7 +466,8 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
           if (
             (node.data.kind === "image-generation" ||
-              node.data.kind === "video-generation") &&
+              node.data.kind === "video-generation" ||
+              node.data.kind === "text2video") &&
             generationId
           ) {
             void refreshGeneration(generationId, node.id);
@@ -476,7 +487,8 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
                     : undefined,
                 generationStatus:
                   (node.data.kind === "image-generation" ||
-                    node.data.kind === "video-generation") &&
+                    node.data.kind === "video-generation" ||
+                    node.data.kind === "text2video") &&
                   generationId
                     ? "queued"
                     : undefined,

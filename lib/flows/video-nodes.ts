@@ -35,6 +35,24 @@ function getPrompt(params: Record<string, unknown>) {
   );
 }
 
+function getPromptFromInput(input: unknown) {
+  if (typeof input === "string") {
+    return input;
+  }
+
+  const record = getRecord(input);
+
+  if (!record) {
+    return undefined;
+  }
+
+  return (
+    getString(record.prompt) ??
+    getString(record.text) ??
+    getString(record.output)
+  );
+}
+
 function getDirectImageUrl(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim()) {
     return value;
@@ -63,12 +81,14 @@ function buildVideoParams({
   params,
   prompt,
   imageUrl,
+  includeImage = true,
 }: {
   params: Record<string, unknown>;
   prompt: string;
   imageUrl?: string;
+  includeImage?: boolean;
 }): GenParams {
-  return {
+  const generationParams = {
     ...Object.fromEntries(
       Object.entries(params).filter(
         ([key]) =>
@@ -87,11 +107,24 @@ function buildVideoParams({
       ),
     ),
     prompt,
+  };
+
+  if (!includeImage) {
+    return generationParams;
+  }
+
+  return {
+    ...generationParams,
     image_url: imageUrl ?? getDirectImageUrl(params),
   };
 }
 
-function estimateVideoCost(params: Record<string, unknown>): CostEstimate {
+function estimateVideoCost(
+  params: Record<string, unknown>,
+  options: {
+    includeImage?: boolean;
+  } = {},
+): CostEstimate {
   const provider = new FalProvider();
   const prompt = getPrompt(params) ?? "placeholder";
 
@@ -100,6 +133,7 @@ function estimateVideoCost(params: Record<string, unknown>): CostEstimate {
     buildVideoParams({
       params,
       prompt,
+      includeImage: options.includeImage,
     }),
   );
 }
@@ -222,7 +256,7 @@ export const videoNodeDefinitions: NodeDefinition[] = [
       },
     ],
     estimateCost(ctx) {
-      return estimateVideoCost(ctx.params);
+      return estimateVideoCost(ctx.params, { includeImage: true });
     },
     async execute(ctx) {
       const prompt = getPrompt(ctx.params) ?? "";
@@ -274,6 +308,76 @@ export const videoNodeDefinitions: NodeDefinition[] = [
     ui: {
       componentKey: "labNode",
       kind: "video-generation",
+    },
+  },
+  {
+    type: "text2video",
+    label: "Texto para Vídeo",
+    description: "Gera vídeo direto de texto via fal.ai, sem imagem de entrada.",
+    inputs: [
+      {
+        id: "input",
+        label: "Prompt",
+        type: "text",
+      },
+    ],
+    outputs: [
+      {
+        id: "output",
+        label: "Vídeo",
+        type: "video",
+      },
+    ],
+    estimateCost(ctx) {
+      return estimateVideoCost(ctx.params, { includeImage: false });
+    },
+    async execute(ctx) {
+      const prompt =
+        getPromptFromInput(ctx.inputs.input) ?? getPrompt(ctx.params) ?? "";
+
+      if (!prompt.trim()) {
+        throw new Error("Prompt obrigatório para gerar vídeo a partir de texto.");
+      }
+
+      const model = getModel(ctx.params);
+      const generationParams = buildVideoParams({
+        params: ctx.params,
+        prompt,
+        includeImage: false,
+      });
+      const { enqueueVideoGenerationJob } = await import(
+        "@/lib/providers/video-generation-job"
+      );
+      const queued = await enqueueVideoGenerationJob({
+        workspaceId: ctx.workspaceId,
+        model,
+        prompt,
+        params: generationParams,
+        flowRunId: ctx.flowRunId,
+        flowNodeId: ctx.nodeId,
+      });
+
+      return {
+        outputs: {
+          output: {
+            generationId: queued.generationId,
+            queueJobId: queued.queueJobId,
+            status: "queued",
+            prompt,
+            model,
+            estimatedCost: queued.estimatedCost,
+          },
+          generationId: queued.generationId,
+          queueJobId: queued.queueJobId,
+          prompt,
+          model,
+        },
+        actualCost: zeroCost,
+      };
+    },
+    ui: {
+      componentKey: "labNode",
+      kind: "text2video",
     },
   },
 ];

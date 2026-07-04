@@ -109,6 +109,7 @@ describe("default nodeDefinitionRegistry singleton (populated with utility nodes
         "prompt",
         "image-generation",
         "video-generation",
+        "text2video",
       ].sort(),
     );
   });
