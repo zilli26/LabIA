@@ -125,6 +125,47 @@ function runFfmpeg(args: string[], operation: string, timeoutMs = DEFAULT_TIMEOU
   });
 }
 
+function runFfmpegProbe(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS) {
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(getFfmpegPath(), args, {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, timeoutMs);
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+      if (stderr.length > MAX_STDERR_CHARS * 4) {
+        stderr = stderr.slice(stderr.length - MAX_STDERR_CHARS * 4);
+      }
+    });
+
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(new Error(`ffmpeg não iniciou em hasAudioStream: ${error.message}`));
+    });
+
+    child.on("close", () => {
+      clearTimeout(timer);
+
+      if (timedOut) {
+        reject(
+          new Error(`ffmpeg excedeu o timeout de ${timeoutMs}ms em hasAudioStream.`),
+        );
+        return;
+      }
+
+      resolve(stderr);
+    });
+  });
+}
+
 async function readOutputAndCleanup(output: TempOutput, keepFile: boolean) {
   try {
     return await fs.readFile(output.outputPath);
@@ -248,6 +289,20 @@ function normalizeVolume(value: number | undefined, fallback: number) {
   return value;
 }
 
+export async function hasAudioStream(
+  videoPath: string,
+  options: Pick<FfmpegOptions, "timeoutMs"> = {},
+): Promise<boolean> {
+  await assertReadableFile(videoPath, "Vídeo");
+
+  const stderr = await runFfmpegProbe(
+    ["-hide_banner", "-i", videoPath],
+    options.timeoutMs,
+  );
+
+  return /^\s*Stream #.+: Audio:/im.test(stderr);
+}
+
 export async function mixAudioTrack(
   videoPath: string,
   audioPath: string,
@@ -258,6 +313,12 @@ export async function mixAudioTrack(
   const output = await resolveOutput(".mp4", options.outputPath);
   const originalVolume = normalizeVolume(options.originalVolume, 1);
   const trackVolume = normalizeVolume(options.trackVolume, 1);
+  const videoHasAudio = await hasAudioStream(videoPath, {
+    timeoutMs: options.timeoutMs,
+  });
+  const filterComplex = videoHasAudio
+    ? `[0:a]volume=${originalVolume}[a0];[1:a]volume=${trackVolume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`
+    : `[1:a]volume=${trackVolume}[aout]`;
 
   await runFfmpeg(
     [
@@ -270,7 +331,7 @@ export async function mixAudioTrack(
       "-i",
       audioPath,
       "-filter_complex",
-      `[0:a]volume=${originalVolume}[a0];[1:a]volume=${trackVolume}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`,
+      filterComplex,
       "-map",
       "0:v:0",
       "-map",

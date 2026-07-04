@@ -1,7 +1,31 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04, Codex** — E2 tarefa 6 (`Montagem`) implementada sem geração real; lint/typecheck/101 testes verdes; preview sem worker conferiu API/paleta/nó com custo R$0 e banco terminou com 0 Generations de vídeo, 0 Assets de montagem e 0 jobs pendentes.
+> Última atualização: **2026-07-04, Codex** — E2 tarefa 6b (`Trilha/voz por upload`) implementada sem geração real; lint/typecheck/107 testes verdes; preview sem worker conferiu API/DOM do controle de trilha, upload real de WAV sintético e banco terminou com 0 Generations de vídeo, 0 Assets de vídeo novos, 0 Assets de áudio de teste e 0 jobs pendentes.
+
+## E2 tarefa 6b concluída — trilha/voz por upload na `Montagem` (2026-07-04, Codex)
+
+Implementação concluída sem chamar fal.ai, sem worker, sem smoke test e sem executar fluxo de vídeo. Apenas ffmpeg local com mídia sintética foi usado. Saídas:
+
+- `lib/video/ffmpeg-service.ts`: criado `hasAudioStream(videoPath)` usando `ffmpeg -hide_banner -i` e leitura do stderr; `mixAudioTrack` agora ramifica entre vídeo com áudio (`amix` com `[0:a]`) e vídeo mudo (trilha como áudio final, sem referenciar `[0:a]`).
+- `app/api/assets/upload/route.ts`: nova rota `POST` multipart para áudio MP3/WAV/M4A/AAC/OGG até 25 MB; usa workspace default, `uploadBufferAssetToSupabase` em `workspaces/{ws}/uploads` e cria `Asset` `AUDIO`/`UPLOADED` sem `Generation`.
+- `lib/flows/video-nodes.ts`: `video-assembly` aceita `audioAssetUrl`/`audioAssetId`; sem trilha mantém concat puro; com trilha baixa o áudio, grava o concat em temp, roda `mixAudioTrack`, faz upload do MP4 final e registra `metadata.hasAudioTrack`/`audioAssetId`. Cleanup centralizado no `finally`.
+- `components/nodes/lab-flow-node.tsx`: `AssemblyControls` ganhou controle `Trilha/voz (opcional)` com input `accept="audio/*"`, upload para `/api/assets/upload`, estado de envio, erro legível, nome da trilha carregada e botão `Remover`; dica de ordem e chip `custo R$0 (montagem local)` preservados.
+- `tests/video/ffmpeg-service.test.ts`: teste real com clipe mudo sintético `testsrc` + faixa `sine`, garantindo MP4 final com áudio e duração do vídeo; `hasAudioStream` cobre true/false.
+- `tests/flows/video-nodes.test.ts` e `tests/api/assets-upload-route.test.ts`: cobrem Montagem com/sem trilha, metadata do Asset, não chamar `mixAudioTrack` sem trilha, ordem dos clipes, upload válido e erros de arquivo ausente/tipo inválido.
+- Decisões registradas em `modulos/02-videos/decisoes.md`: detecção por stderr do ffmpeg, upload como parâmetro da Montagem sem porta de áudio, e rota mínima `AUDIO`/`UPLOADED`.
+
+Validação desta sessão:
+
+- `npx vitest run tests/video/ffmpeg-service.test.ts tests/flows/video-nodes.test.ts tests/api/assets-upload-route.test.ts` -> 35 testes verdes.
+- `npm run lint` -> limpo.
+- `npm run typecheck` -> limpo.
+- `npx vitest run` -> 107 testes verdes.
+- `npm run dev` sem worker: `/api/flows/node-definitions` serviu `video-assembly`; no canvas, a Montagem foi adicionada apenas no estado local e o DOM confirmou `Trilha/voz (opcional)`, `input[type=file][accept="audio/*"]`, dica de ordem e chip `custo R$0 (montagem local)`.
+- `POST /api/assets/upload` com WAV sintético local retornou 200 e criou `Asset` `AUDIO`/`UPLOADED`; o objeto no Storage e o Asset de teste foram apagados depois.
+- Banco verificado via Prisma: **0 Generations de vídeo, 0 Assets `VIDEO` novos de `labia/ffmpeg`, 0 Assets de áudio de teste e 0 jobs pendentes** em `pgboss.job` para `video.generate`.
+
+Próxima ação: tarefa 7 da E2 (`Modal de confirmação de custo total`), mantendo a regra de nenhuma geração real sem aprovação explícita do Felipe com custo em R$ declarado antes.
 
 ## E2 tarefa 6 concluída — nó `Montagem` / concat local (2026-07-04, Codex)
 

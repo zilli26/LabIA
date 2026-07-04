@@ -360,6 +360,26 @@ async function resolveAssemblyClip(
 }
 
 function getExtensionFromContentType(contentType: string) {
+  if (contentType.includes("aac")) {
+    return "aac";
+  }
+
+  if (contentType.includes("mpeg") || contentType.includes("mp3")) {
+    return "mp3";
+  }
+
+  if (contentType.includes("mp4") || contentType.includes("m4a")) {
+    return "mp4";
+  }
+
+  if (contentType.includes("ogg")) {
+    return "ogg";
+  }
+
+  if (contentType.includes("wav") || contentType.includes("wave")) {
+    return "wav";
+  }
+
   if (contentType.includes("mp4")) {
     return "mp4";
   }
@@ -375,17 +395,21 @@ function getExtensionFromContentType(contentType: string) {
   return "mp4";
 }
 
-async function downloadVideoToTemp(
+async function downloadRemoteAssetToTemp(
   sourceUrl: string,
   options: {
     directory?: string;
     fileBaseName?: string;
+    fallbackExtension?: string;
+    failureLabel?: string;
   } = {},
 ) {
   const response = await fetch(sourceUrl);
 
   if (!response.ok) {
-    throw new Error(`Falha ao baixar vídeo upstream (${response.status}).`);
+    throw new Error(
+      `Falha ao baixar ${options.failureLabel ?? "asset remoto"} (${response.status}).`,
+    );
   }
 
   const contentType =
@@ -394,19 +418,59 @@ async function downloadVideoToTemp(
   const directory =
     options.directory ??
     (await fs.mkdtemp(path.join(os.tmpdir(), "labia-video-extend-")));
-  const videoPath = path.join(
+  const filePath = path.join(
     directory,
-    `${options.fileBaseName ?? "upstream"}.${getExtensionFromContentType(contentType)}`,
+    `${options.fileBaseName ?? "upstream"}.${
+      getExtensionFromContentType(contentType) ?? options.fallbackExtension ?? "bin"
+    }`,
   );
 
-  await fs.writeFile(videoPath, bytes);
+  await fs.writeFile(filePath, bytes);
 
   return {
-    videoPath,
+    filePath,
     cleanup: () =>
       options.directory
         ? Promise.resolve()
         : fs.rm(directory, { recursive: true, force: true }),
+  };
+}
+
+async function downloadVideoToTemp(
+  sourceUrl: string,
+  options: {
+    directory?: string;
+    fileBaseName?: string;
+  } = {},
+) {
+  const asset = await downloadRemoteAssetToTemp(sourceUrl, {
+    ...options,
+    fallbackExtension: "mp4",
+    failureLabel: "vídeo upstream",
+  });
+
+  return {
+    videoPath: asset.filePath,
+    cleanup: asset.cleanup,
+  };
+}
+
+async function downloadAudioToTemp(
+  sourceUrl: string,
+  options: {
+    directory?: string;
+    fileBaseName?: string;
+  } = {},
+) {
+  const asset = await downloadRemoteAssetToTemp(sourceUrl, {
+    ...options,
+    fallbackExtension: "mp3",
+    failureLabel: "trilha de áudio",
+  });
+
+  return {
+    audioPath: asset.filePath,
+    cleanup: asset.cleanup,
   };
 }
 
@@ -665,15 +729,39 @@ export const videoNodeDefinitions: NodeDefinition[] = [
             }),
           ),
         );
-        const { concatClips } = await import("@/lib/video/ffmpeg-service");
-        const assembledVideo = await concatClips(
-          tempVideos.map((video) => video.videoPath),
+        const { concatClips, mixAudioTrack } = await import(
+          "@/lib/video/ffmpeg-service"
         );
+        const concatPath = path.join(tempDirectory, "montagem-concat.mp4");
+        await concatClips(
+          tempVideos.map((video) => video.videoPath),
+          {
+            outputPath: concatPath,
+          },
+        );
+        let finalVideo: Buffer = await fs.readFile(concatPath);
+        const audioAssetUrl = getString(ctx.params.audioAssetUrl);
+        const audioAssetId = getString(ctx.params.audioAssetId);
+
+        if (audioAssetUrl) {
+          const tempAudio = await downloadAudioToTemp(audioAssetUrl, {
+            directory: tempDirectory,
+            fileBaseName: "trilha",
+          });
+          const mixedPath = path.join(tempDirectory, "montagem-com-trilha.mp4");
+
+          finalVideo = await mixAudioTrack(concatPath, tempAudio.audioPath, {
+            outputPath: mixedPath,
+            trackVolume: getNumber(ctx.params.audioTrackVolume) ?? 1,
+            originalVolume: getNumber(ctx.params.originalAudioVolume) ?? 1,
+          });
+        }
+
         const { uploadBufferAssetToSupabase } = await import(
           "@/lib/providers/asset-storage"
         );
         const uploadedVideo = await uploadBufferAssetToSupabase({
-          bytes: assembledVideo,
+          bytes: finalVideo,
           workspaceId: ctx.workspaceId,
           keyPrefix: `workspaces/${ctx.workspaceId}/flow-runs/${ctx.flowRunId}/${ctx.nodeId}`,
           contentType: "video/mp4",
@@ -700,6 +788,8 @@ export const videoNodeDefinitions: NodeDefinition[] = [
               sourceGenerationIds,
               flowRunId: ctx.flowRunId,
               nodeId: ctx.nodeId,
+              audioAssetId: audioAssetUrl ? audioAssetId : undefined,
+              hasAudioTrack: Boolean(audioAssetUrl),
             }),
           },
         });
@@ -712,6 +802,7 @@ export const videoNodeDefinitions: NodeDefinition[] = [
               type: "video",
               status: "done",
               clipCount: resolvedClips.length,
+              audioAssetId: audioAssetUrl ? audioAssetId : undefined,
             },
             assetId: asset.id,
             url: uploadedVideo.url,

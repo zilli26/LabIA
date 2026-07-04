@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { NodeExecutionContext } from "@/lib/flows/types";
@@ -15,6 +17,7 @@ const mockPrisma = vi.hoisted(() => ({
 const mockEnqueueVideoGenerationJob = vi.hoisted(() => vi.fn());
 const mockExtractLastFrame = vi.hoisted(() => vi.fn());
 const mockConcatClips = vi.hoisted(() => vi.fn());
+const mockMixAudioTrack = vi.hoisted(() => vi.fn());
 const mockUploadBufferAssetToSupabase = vi.hoisted(() => vi.fn());
 const mockFetch = vi.hoisted(() => vi.fn());
 
@@ -29,6 +32,7 @@ vi.mock("@/lib/providers/video-generation-job", () => ({
 vi.mock("@/lib/video/ffmpeg-service", () => ({
   extractLastFrame: mockExtractLastFrame,
   concatClips: mockConcatClips,
+  mixAudioTrack: mockMixAudioTrack,
 }));
 
 vi.mock("@/lib/providers/asset-storage", () => ({
@@ -563,9 +567,27 @@ describe("video-assembly node", () => {
     mockPrisma.asset.create.mockReset();
     mockEnqueueVideoGenerationJob.mockReset();
     mockConcatClips.mockReset();
+    mockMixAudioTrack.mockReset();
     mockUploadBufferAssetToSupabase.mockReset();
     mockFetch.mockReset();
-    mockConcatClips.mockResolvedValue(Buffer.from("assembled-mp4"));
+    mockConcatClips.mockImplementation(async (_clipPaths, options) => {
+      const bytes = Buffer.from("assembled-mp4");
+
+      if (options?.outputPath) {
+        await fs.writeFile(options.outputPath, bytes);
+      }
+
+      return bytes;
+    });
+    mockMixAudioTrack.mockImplementation(async (_videoPath, _audioPath, options) => {
+      const bytes = Buffer.from("assembled-with-audio-mp4");
+
+      if (options?.outputPath) {
+        await fs.writeFile(options.outputPath, bytes);
+      }
+
+      return bytes;
+    });
     mockUploadBufferAssetToSupabase.mockResolvedValue({
       bucket: "assets",
       path: "workspaces/workspace/flow-runs/flow-run/assembly-node/video.mp4",
@@ -645,11 +667,17 @@ describe("video-assembly node", () => {
       3,
       "https://assets.example.com/right.mp4",
     );
-    expect(mockConcatClips).toHaveBeenCalledWith([
-      expect.stringMatching(/clip-001\.mp4$/),
-      expect.stringMatching(/clip-002\.mp4$/),
-      expect.stringMatching(/clip-003\.mp4$/),
-    ]);
+    expect(mockConcatClips).toHaveBeenCalledWith(
+      [
+        expect.stringMatching(/clip-001\.mp4$/),
+        expect.stringMatching(/clip-002\.mp4$/),
+        expect.stringMatching(/clip-003\.mp4$/),
+      ],
+      expect.objectContaining({
+        outputPath: expect.stringMatching(/montagem-concat\.mp4$/),
+      }),
+    );
+    expect(mockMixAudioTrack).not.toHaveBeenCalled();
     expect(mockUploadBufferAssetToSupabase).toHaveBeenCalledWith(
       expect.objectContaining({
         bytes: Buffer.from("assembled-mp4"),
@@ -677,6 +705,7 @@ describe("video-assembly node", () => {
           sourceGenerationIds: ["gen-left", "gen-middle", "gen-right"],
           flowRunId: "flow-run",
           nodeId: "assembly-node",
+          hasAudioTrack: false,
         },
       }),
     });
@@ -714,6 +743,7 @@ describe("video-assembly node", () => {
 
     expect(mockPrisma.generation.findUnique).not.toHaveBeenCalled();
     expect(mockConcatClips).not.toHaveBeenCalled();
+    expect(mockMixAudioTrack).not.toHaveBeenCalled();
     expect(mockUploadBufferAssetToSupabase).not.toHaveBeenCalled();
     expect(mockPrisma.asset.create).not.toHaveBeenCalled();
   });
@@ -749,8 +779,91 @@ describe("video-assembly node", () => {
 
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockConcatClips).not.toHaveBeenCalled();
+    expect(mockMixAudioTrack).not.toHaveBeenCalled();
     expect(mockUploadBufferAssetToSupabase).not.toHaveBeenCalled();
     expect(mockPrisma.asset.create).not.toHaveBeenCalled();
+  });
+
+  it("mixes an uploaded audio track when audioAssetUrl is configured", async () => {
+    const videosByGenerationId = new Map([
+      ["gen-left", "https://assets.example.com/left.mp4"],
+      ["gen-right", "https://assets.example.com/right.mp4"],
+    ]);
+    mockPrisma.generation.findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) => ({
+        id: where.id,
+        status: "DONE",
+        errorMessage: null,
+        assets: [
+          {
+            url: videosByGenerationId.get(where.id),
+          },
+        ],
+      }),
+    );
+    mockFetch.mockImplementation(async (url: string) => ({
+      ok: true,
+      headers: {
+        get: (name: string) =>
+          name === "content-type" && url.endsWith(".mp3")
+            ? "audio/mpeg"
+            : "video/mp4",
+      },
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    }));
+
+    const result = await videoAssemblyDefinition.execute(
+      makeContext({
+        nodeId: "assembly-node",
+        params: {
+          audioAssetId: "audio-asset-id",
+          audioAssetUrl: "https://assets.example.com/track.mp3",
+        },
+        inputs: {
+          input: [{ generationId: "gen-left" }, { generationId: "gen-right" }],
+        },
+      }),
+    );
+
+    expect(mockConcatClips).toHaveBeenCalledWith(
+      [
+        expect.stringMatching(/clip-001\.mp4$/),
+        expect.stringMatching(/clip-002\.mp4$/),
+      ],
+      expect.objectContaining({
+        outputPath: expect.stringMatching(/montagem-concat\.mp4$/),
+      }),
+    );
+    expect(mockMixAudioTrack).toHaveBeenCalledWith(
+      expect.stringMatching(/montagem-concat\.mp4$/),
+      expect.stringMatching(/trilha\.mp3$/),
+      expect.objectContaining({
+        outputPath: expect.stringMatching(/montagem-com-trilha\.mp4$/),
+        trackVolume: 1,
+        originalVolume: 1,
+      }),
+    );
+    expect(mockUploadBufferAssetToSupabase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bytes: Buffer.from("assembled-with-audio-mp4"),
+      }),
+    );
+    expect(mockPrisma.asset.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        metadata: {
+          clipCount: 2,
+          sourceGenerationIds: ["gen-left", "gen-right"],
+          flowRunId: "flow-run",
+          nodeId: "assembly-node",
+          audioAssetId: "audio-asset-id",
+          hasAudioTrack: true,
+        },
+      }),
+    });
+    expect(result.outputs.output).toMatchObject({
+      audioAssetId: "audio-asset-id",
+      clipCount: 2,
+    });
   });
 });
 

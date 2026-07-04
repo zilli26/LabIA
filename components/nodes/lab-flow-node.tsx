@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import {
@@ -401,9 +401,56 @@ function VideoControls({
   );
 }
 
-function AssemblyControls({ params }: { params: Record<string, unknown> }) {
+function AssemblyControls({
+  params,
+  updateParams,
+}: {
+  params: Record<string, unknown>;
+  updateParams: (nextParams: Record<string, unknown>) => void;
+}) {
   const assetUrl = getString(params.assetUrl);
   const assemblyStatus = getString(params.assemblyStatus);
+  const audioAssetId = getString(params.audioAssetId);
+  const audioAssetName = getString(params.audioAssetName);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [audioUploadError, setAudioUploadError] = useState<string | undefined>();
+
+  async function uploadAudioTrack(file: File) {
+    setIsUploadingAudio(true);
+    setAudioUploadError(undefined);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/assets/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        assetId?: string;
+        url?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.assetId || !payload.url) {
+        throw new Error(payload.error ?? "Não foi possível enviar o áudio.");
+      }
+
+      updateParams({
+        audioAssetId: payload.assetId,
+        audioAssetUrl: payload.url,
+        audioAssetName: file.name,
+      });
+    } catch (error) {
+      setAudioUploadError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar o áudio.",
+      );
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  }
 
   return (
     <div className="mt-3 space-y-3">
@@ -414,6 +461,60 @@ function AssemblyControls({ params }: { params: Record<string, unknown> }) {
         <div className="mt-2 inline-flex rounded-full bg-lab-reagent-dim px-2 py-1 font-mono text-[11px] text-lab-reagent-bright">
           custo R$0 (montagem local)
         </div>
+      </div>
+
+      <div className="rounded-control border border-lab-border bg-lab-surface-1 px-2.5 py-2">
+        <label className="block">
+          <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
+            Trilha/voz (opcional)
+          </span>
+          <input
+            data-id="assembly-audio-upload"
+            type="file"
+            accept="audio/*"
+            disabled={isUploadingAudio}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+
+              if (file) {
+                void uploadAudioTrack(file);
+              }
+            }}
+            className="nodrag nowheel block w-full text-xs text-lab-text file:mr-2 file:rounded-control file:border-0 file:bg-lab-reagent-dim file:px-2 file:py-1.5 file:font-mono file:text-[11px] file:text-lab-reagent-bright hover:file:bg-lab-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+        </label>
+
+        <div className="mt-2 flex min-h-7 items-center justify-between gap-2">
+          <span className="min-w-0 truncate text-xs text-lab-text-dim">
+            {isUploadingAudio
+              ? "Enviando áudio..."
+              : audioAssetId
+                ? audioAssetName ?? "Áudio carregado"
+                : "Nenhuma trilha carregada."}
+          </span>
+          {audioAssetId ? (
+            <button
+              type="button"
+              onClick={() =>
+                updateParams({
+                  audioAssetId: undefined,
+                  audioAssetUrl: undefined,
+                  audioAssetName: undefined,
+                })
+              }
+              className="nodrag shrink-0 rounded-control border border-lab-border px-2 py-1 font-mono text-[11px] text-lab-text-dim transition-colors hover:border-lab-border-strong hover:text-lab-text"
+            >
+              Remover
+            </button>
+          ) : null}
+        </div>
+
+        {audioUploadError ? (
+          <p className="mt-2 rounded-control border border-lab-danger/40 bg-lab-surface-2 px-2 py-1.5 text-xs text-lab-danger">
+            {audioUploadError}
+          </p>
+        ) : null}
       </div>
 
       {assetUrl ? (
@@ -606,7 +707,7 @@ export function LabFlowNodeComponent({
         ) : null}
 
         {data.kind === "video-assembly" ? (
-          <AssemblyControls params={params} />
+          <AssemblyControls params={params} updateParams={updateParams} />
         ) : null}
       </div>
 

@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   concatClips,
   extractLastFrame,
+  hasAudioStream,
   mixAudioTrack,
 } from "@/lib/video/ffmpeg-service";
 
@@ -73,7 +74,7 @@ async function inspectMedia(filePath: string) {
 
   return {
     durationSeconds,
-    hasAudio: /Audio:/i.test(stderr),
+    hasAudio: /^\s*Stream #.+: Audio:/im.test(stderr),
     stderr,
   };
 }
@@ -89,6 +90,7 @@ describe.sequential("ffmpeg service", () => {
   let tempDir: string;
   let clipAPath: string;
   let clipBPath: string;
+  let mutedClipPath: string;
   let audioPath: string;
   let corruptPath: string;
 
@@ -96,6 +98,7 @@ describe.sequential("ffmpeg service", () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "labia-ffmpeg-test-"));
     clipAPath = path.join(tempDir, "clip-a.mp4");
     clipBPath = path.join(tempDir, "clip-b.mp4");
+    mutedClipPath = path.join(tempDir, "clip-muted.mp4");
     audioPath = path.join(tempDir, "track.wav");
     corruptPath = path.join(tempDir, "corrupt.mp4");
 
@@ -139,6 +142,21 @@ describe.sequential("ffmpeg service", () => {
       "-c:a",
       "aac",
       clipBPath,
+    ]);
+
+    await runFfmpeg([
+      "-hide_banner",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=160x90:rate=24:duration=2",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-an",
+      mutedClipPath,
     ]);
 
     await runFfmpeg([
@@ -201,6 +219,23 @@ describe.sequential("ffmpeg service", () => {
   );
 
   it(
+    "hasAudioStream detects video audio presence",
+    async () => {
+      await expect(
+        hasAudioStream(clipAPath, {
+          timeoutMs: TEST_TIMEOUT_MS,
+        }),
+      ).resolves.toBe(true);
+      await expect(
+        hasAudioStream(mutedClipPath, {
+          timeoutMs: TEST_TIMEOUT_MS,
+        }),
+      ).resolves.toBe(false);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
     "mixAudioTrack preserves video duration and produces audio",
     async () => {
       const outputPath = path.join(tempDir, "mixed.mp4");
@@ -222,6 +257,32 @@ describe.sequential("ffmpeg service", () => {
         (source.durationSeconds ?? 0) + 0.25,
       );
       expect(mixed.hasAudio).toBe(true);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "mixAudioTrack adds a full audio track to a muted video",
+    async () => {
+      const outputPath = path.join(tempDir, "mixed-muted.mp4");
+
+      await mixAudioTrack(mutedClipPath, audioPath, {
+        outputPath,
+        trackVolume: 0.7,
+        timeoutMs: TEST_TIMEOUT_MS,
+      });
+
+      const source = await inspectMedia(mutedClipPath);
+      const mixed = await inspectMedia(outputPath);
+
+      expect(source.hasAudio).toBe(false);
+      expect(mixed.hasAudio).toBe(true);
+      expect(mixed.durationSeconds).toBeGreaterThanOrEqual(
+        (source.durationSeconds ?? 0) - 0.25,
+      );
+      expect(mixed.durationSeconds).toBeLessThanOrEqual(
+        (source.durationSeconds ?? 0) + 0.25,
+      );
     },
     TEST_TIMEOUT_MS,
   );
