@@ -10,6 +10,10 @@ import {
   IMAGE_GENERATION_QUEUE,
   startImageGenerationWorker,
 } from "../lib/providers/image-generation-job";
+import {
+  VIDEO_GENERATION_QUEUE,
+  startVideoGenerationWorker,
+} from "../lib/providers/video-generation-job";
 
 loadEnvConfig(process.cwd());
 
@@ -22,6 +26,9 @@ async function main() {
 
   const imageBoss = await startImageGenerationWorker();
   console.log(`Worker ativo na fila ${IMAGE_GENERATION_QUEUE}.`);
+
+  const videoBoss = await startVideoGenerationWorker();
+  console.log(`Worker ativo na fila ${VIDEO_GENERATION_QUEUE}.`);
 
   let isStopping = false;
   const stop = async () => {
@@ -36,6 +43,10 @@ async function main() {
         timeout: 30_000,
       }),
       imageBoss.stop({
+        graceful: true,
+        timeout: 30_000,
+      }),
+      videoBoss.stop({
         graceful: true,
         timeout: 30_000,
       }),

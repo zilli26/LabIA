@@ -1,7 +1,30 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04** (sessão Codex - tarefa 0 da E2 concluída por pesquisa documental, sem geração).
+> Última atualização: **2026-07-04** (sessão Codex - tarefa 1 da E2 implementada por testes unitários, sem geração).
+
+## E2 tarefa 1 concluída — custo de vídeo + fila `video.generate` (2026-07-04, Codex)
+
+Implementação da tarefa 1 do módulo `02-videos` concluída sem chamar API paga, worker, smoke test ou geração real. Saídas:
+
+- `lib/providers/fal.ts`: `estimateCost` agora roteia modelos de vídeo antes dos modelos de imagem e calcula Wan 2.5, Kling 2.5 Turbo Pro, Hailuo 2.3 Standard, Seedance 2.0 e Veo 3 com a tabela local da tarefa 0. `generate`/`waitForResult` aceitam endpoints de vídeo, normalizam input por modelo e falham de forma legível se o output não trouxer URL de vídeo.
+- `lib/providers/video-generation-job.ts`: criada fila `video.generate`, com `Generation` gravada com custo estimado antes do enqueue, transição RUNNING/DONE/FAILED, persistência de `Asset` tipo `VIDEO`, custo real e erro legível compartilhado.
+- `scripts/worker.ts`: worker unificado passa a registrar `flow-node-execution`, `image.generate` e `video.generate`.
+- `lib/providers/provider-errors.ts`: extraído `getProviderErrorMessage` para evitar duplicação entre imagem e vídeo.
+- `tests/providers/fal-video-cost.test.ts`: 20 testes unitários para preços de vídeo, BRL, erros legíveis e custo real por duração retornada.
+- `modulos/02-videos/fontes-tarefa-0.md`: Seedance 1080p reconfirmado na página pública fal.ai em 2026-07-04 antes de entrar no `estimateCost`.
+
+Validação desta sessão:
+
+- `npx vitest run tests/providers/fal-video-cost.test.ts` -> 20 testes verdes.
+- `npx vitest run` -> 67 testes verdes.
+- `npm run lint` -> limpo.
+- `npm run typecheck` -> limpo.
+- Nenhum comando executado nesta sessão chamou `fal.queue`, `worker`, `smoke`, `npm run dev` ou geração real.
+
+### Revisão Claude da tarefa 1 (2026-07-04) — APROVADA e commitada
+
+Validação externa independente: lint, typecheck e os 67 testes re-executados pelo revisor, tudo verde. Diff inspecionado por completo: roteamento vídeo/imagem no `estimateCost`, matemática de custo conferida caso a caso contra a tabela da tarefa 0 (Wan por resolução, Kling 0,35+0,07/s, Hailuo 6s/10s com rejeição de duração não confirmada, Seedance 720p/1080p com rejeição de resolução sem preço, Veo 3 com/sem áudio, custo real pela duração retornada), fila `video.generate` espelhando fielmente o padrão de `image.generate` (custo estimado gravado ANTES do enqueue, erro legível compartilhado em `provider-errors.ts`, expire 1800s justificado). **Seedance 1080p a US$0,682/s re-verificado pelo revisor na página pública** ("for 1080p you will be charged $0.682/second") — a leitura da revisão da tarefa 0 é que tinha sido parcial; a reconfirmação do Codex estava correta. `AssetType.VIDEO` já existia no schema Prisma (sem migration). Nenhuma correção necessária — primeira entrega do Codex na E2 sem regressão de acentos.
 
 ## E2 tarefa 0 concluída — catálogo fal.ai de vídeo (2026-07-04, Codex)
 

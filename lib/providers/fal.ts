@@ -6,7 +6,9 @@ import {
   FAL_VIDEO_MODELS,
   FAL_PROVIDER_ID,
   findFalImageModel,
+  findFalVideoModel,
   resolveFalImageModelId,
+  resolveFalVideoModelId,
 } from "./fal-models";
 import type {
   CostEstimate,
@@ -79,6 +81,16 @@ function getBooleanParam(params: GenParams, key: string) {
   return typeof value === "boolean" ? value : undefined;
 }
 
+function getPromptValue(params: GenParams, kind: "imagem" | "video") {
+  const prompt = getStringParam(params, "prompt");
+
+  if (!prompt?.trim()) {
+    throw new Error(`prompt e obrigatorio para gerar ${kind}.`);
+  }
+
+  return prompt;
+}
+
 function getImageCount(params: GenParams) {
   const requested = getNumberParam(params, "numImages") ?? getNumberParam(params, "num_images") ?? 1;
 
@@ -90,13 +102,7 @@ function getImageCount(params: GenParams) {
 }
 
 function getPrompt(params: GenParams) {
-  const prompt = getStringParam(params, "prompt");
-
-  if (!prompt?.trim()) {
-    throw new Error("prompt e obrigatorio para gerar imagem.");
-  }
-
-  return prompt;
+  return getPromptValue(params, "imagem");
 }
 
 function getUsdBrlRate(explicitRate?: number) {
@@ -199,6 +205,210 @@ function normalizeFalInput(model: string, params: GenParams) {
   throw new Error(`Modelo fal.ai nao suportado: ${model}`);
 }
 
+function getVideoMode(params: GenParams) {
+  if (getStringParam(params, "reference_video_url") ?? getStringParam(params, "video_url")) {
+    return "reference-to-video" as const;
+  }
+
+  if (getStringParam(params, "image_url") ?? getStringParam(params, "imageUrl")) {
+    return "image-to-video" as const;
+  }
+
+  return "text-to-video" as const;
+}
+
+function getVideoEndpoint(model: string, params: GenParams) {
+  const modelInfo = findFalVideoModel(model);
+
+  if (!modelInfo) {
+    throw new Error(`Modelo de video fal.ai nao catalogado: ${model}`);
+  }
+
+  const mode = getVideoMode(params);
+  const endpoint = modelInfo.endpoints[mode];
+
+  if (!endpoint) {
+    throw new Error(`${modelInfo.name} nao suporta ${mode} pela fal.ai.`);
+  }
+
+  return {
+    endpoint,
+    mode,
+    modelInfo,
+  };
+}
+
+function normalizeVideoDurationValue(params: GenParams, fallback?: unknown) {
+  return params.duration ?? params.durationSeconds ?? params.duration_seconds ?? fallback;
+}
+
+function parseDurationSeconds(value: unknown, modelName: string) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    if (value === "auto") {
+      throw new Error(`${modelName}: duracao auto nao permite estimativa de custo antes da geracao.`);
+    }
+
+    const normalized = value.trim().replace(/s$/i, "");
+    const parsed = Number(normalized);
+
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  throw new Error(`${modelName}: duracao de video invalida.`);
+}
+
+function getVideoDurationSeconds(params: GenParams, modelName: string, fallback?: unknown) {
+  const duration = parseDurationSeconds(normalizeVideoDurationValue(params, fallback), modelName);
+
+  if (duration <= 0) {
+    throw new Error(`${modelName}: duracao precisa ser maior que zero.`);
+  }
+
+  return duration;
+}
+
+function getVideoResolution(params: GenParams, fallback?: unknown) {
+  const resolution = params.resolution ?? fallback;
+  return typeof resolution === "string" ? resolution : undefined;
+}
+
+function normalizeDurationInput(value: unknown) {
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return value;
+}
+
+function normalizeFalVideoInput(model: string, params: GenParams) {
+  const { endpoint, mode, modelInfo } = getVideoEndpoint(model, params);
+  const defaultInput = modelInfo.defaultInput;
+  const prompt = getPromptValue(params, "video");
+  const imageUrl = getStringParam(params, "image_url") ?? getStringParam(params, "imageUrl");
+  const referenceVideoUrl =
+    getStringParam(params, "reference_video_url") ?? getStringParam(params, "video_url");
+  const duration = normalizeDurationInput(normalizeVideoDurationValue(params, defaultInput.duration));
+  const resolution =
+    getStringParam(params, "resolution") ??
+    (typeof defaultInput.resolution === "string" ? defaultInput.resolution : undefined);
+  const aspectRatio =
+    getStringParam(params, "aspect_ratio") ??
+    getStringParam(params, "aspectRatio") ??
+    (typeof defaultInput.aspect_ratio === "string" ? defaultInput.aspect_ratio : undefined);
+
+  if (mode === "image-to-video" && !imageUrl) {
+    throw new Error("image_url e obrigatorio para gerar video a partir de imagem.");
+  }
+
+  if (mode === "reference-to-video" && !referenceVideoUrl) {
+    throw new Error("reference_video_url e obrigatorio para reference-to-video.");
+  }
+
+  const common = {
+    prompt,
+    duration,
+    resolution,
+    aspect_ratio: aspectRatio,
+    seed: getNumberParam(params, "seed"),
+    end_user_id: getStringParam(params, "end_user_id") ?? getStringParam(params, "endUserId"),
+  };
+
+  if (endpoint.includes("wan-25-preview")) {
+    return removeUndefined({
+      prompt,
+      image_url: imageUrl,
+      audio_url: getStringParam(params, "audio_url") ?? getStringParam(params, "audioUrl"),
+      resolution,
+      duration,
+      aspect_ratio: aspectRatio,
+      enable_prompt_expansion:
+        getBooleanParam(params, "enable_prompt_expansion") ??
+        getBooleanParam(params, "enablePromptExpansion") ??
+        (typeof defaultInput.enable_prompt_expansion === "boolean"
+          ? defaultInput.enable_prompt_expansion
+          : undefined),
+      enable_safety_checker:
+        getBooleanParam(params, "enable_safety_checker") ??
+        getBooleanParam(params, "enableSafetyChecker") ??
+        (typeof defaultInput.enable_safety_checker === "boolean"
+          ? defaultInput.enable_safety_checker
+          : undefined),
+      seed: common.seed,
+    });
+  }
+
+  if (endpoint.includes("kling-video")) {
+    return removeUndefined({
+      prompt,
+      image_url: imageUrl,
+      duration,
+      negative_prompt:
+        getStringParam(params, "negative_prompt") ??
+        getStringParam(params, "negativePrompt") ??
+        (typeof defaultInput.negative_prompt === "string" ? defaultInput.negative_prompt : undefined),
+      cfg_scale:
+        getNumberParam(params, "cfg_scale") ??
+        getNumberParam(params, "cfgScale") ??
+        (typeof defaultInput.cfg_scale === "number" ? defaultInput.cfg_scale : undefined),
+    });
+  }
+
+  if (endpoint.includes("minimax/hailuo-2.3")) {
+    return removeUndefined({
+      prompt,
+      image_url: imageUrl,
+      duration,
+      prompt_optimizer:
+        getBooleanParam(params, "prompt_optimizer") ??
+        getBooleanParam(params, "promptOptimizer") ??
+        (typeof defaultInput.prompt_optimizer === "boolean"
+          ? defaultInput.prompt_optimizer
+          : undefined),
+    });
+  }
+
+  if (endpoint.includes("seedance-2.0")) {
+    return removeUndefined({
+      ...common,
+      image_url: imageUrl,
+      video_url: referenceVideoUrl,
+      end_image_url:
+        getStringParam(params, "end_image_url") ?? getStringParam(params, "endImageUrl"),
+      generate_audio:
+        getBooleanParam(params, "generate_audio") ??
+        getBooleanParam(params, "generateAudio") ??
+        (typeof defaultInput.generate_audio === "boolean" ? defaultInput.generate_audio : undefined),
+    });
+  }
+
+  if (endpoint.includes("veo3")) {
+    return removeUndefined({
+      ...common,
+      image_url: imageUrl,
+      generate_audio:
+        getBooleanParam(params, "generate_audio") ??
+        getBooleanParam(params, "generateAudio") ??
+        (typeof defaultInput.generate_audio === "boolean" ? defaultInput.generate_audio : undefined),
+      auto_fix:
+        getBooleanParam(params, "auto_fix") ??
+        getBooleanParam(params, "autoFix") ??
+        (typeof defaultInput.auto_fix === "boolean" ? defaultInput.auto_fix : undefined),
+      safety_tolerance:
+        getStringParam(params, "safety_tolerance") ??
+        getStringParam(params, "safetyTolerance") ??
+        (typeof defaultInput.safety_tolerance === "string" ? defaultInput.safety_tolerance : undefined),
+    });
+  }
+
+  throw new Error(`Modelo de video fal.ai nao catalogado: ${model}`);
+}
+
 function normalizeGeneratedImages(raw: unknown): GeneratedAsset[] {
   const maybeImages =
     raw && typeof raw === "object" && "images" in raw
@@ -220,6 +430,190 @@ function normalizeGeneratedImages(raw: unknown): GeneratedAsset[] {
       height: typeof image.height === "number" ? image.height : undefined,
     }))
     .filter((image) => image.url);
+}
+
+function normalizeGeneratedVideos(raw: unknown): GeneratedAsset[] {
+  const maybeVideo =
+    raw && typeof raw === "object" && "video" in raw
+      ? (raw as { video?: unknown }).video
+      : undefined;
+  const videos = Array.isArray(maybeVideo) ? maybeVideo : maybeVideo ? [maybeVideo] : [];
+  const rawDuration =
+    raw && typeof raw === "object" && "duration" in raw && typeof raw.duration === "number"
+      ? raw.duration
+      : raw &&
+          typeof raw === "object" &&
+          "duration_seconds" in raw &&
+          typeof raw.duration_seconds === "number"
+        ? raw.duration_seconds
+        : undefined;
+
+  return videos
+    .filter((video): video is Record<string, unknown> => Boolean(video) && typeof video === "object")
+    .map((video) => ({
+      url: typeof video.url === "string" ? video.url : "",
+      contentType: typeof video.content_type === "string" ? video.content_type : undefined,
+      fileName: typeof video.file_name === "string" ? video.file_name : undefined,
+      fileSize: typeof video.file_size === "number" ? video.file_size : undefined,
+      width: typeof video.width === "number" ? video.width : undefined,
+      height: typeof video.height === "number" ? video.height : undefined,
+      durationSeconds:
+        typeof video.duration === "number"
+          ? video.duration
+          : typeof video.duration_seconds === "number"
+            ? video.duration_seconds
+            : rawDuration,
+    }))
+    .filter((video) => video.url);
+}
+
+function isLikelyFalVideoModel(model: string) {
+  return /video|veo|wan|kling|hailuo|minimax|seedance|bytedance/i.test(model);
+}
+
+function videoCostSource(modelName: string) {
+  if (modelName === "Seedance 2.0") {
+    return "modulos/02-videos/fontes-tarefa-0.md + fal.ai/bytedance/seedance-2.0/image-to-video reconfirmado em 2026-07-04";
+  }
+
+  return "modulos/02-videos/fontes-tarefa-0.md + fal.ai docs consultadas em 2026-07-04";
+}
+
+function getWanUnitPriceUsd(resolution: string | undefined) {
+  if (resolution === "480p") {
+    return 0.05;
+  }
+
+  if (resolution === "720p") {
+    return 0.1;
+  }
+
+  if (resolution === "1080p" || !resolution) {
+    return 0.15;
+  }
+
+  throw new Error(`Wan 2.5: resolucao sem preco confirmado: ${resolution}`);
+}
+
+function getSeedanceUnitPriceUsd(resolution: string | undefined) {
+  if (!resolution || resolution === "720p") {
+    return 0.3034;
+  }
+
+  if (resolution === "1080p") {
+    return 0.682;
+  }
+
+  throw new Error(`Seedance 2.0: preco ${resolution} nao confirmado.`);
+}
+
+function estimateFalVideoCost({
+  model,
+  params,
+  usdBrlRate,
+}: {
+  model: string;
+  params: GenParams;
+  usdBrlRate: number;
+}) {
+  const modelInfo = findFalVideoModel(model);
+
+  if (!modelInfo) {
+    throw new Error(`Modelo de video fal.ai nao catalogado: ${model}`);
+  }
+
+  const duration = getVideoDurationSeconds(params, modelInfo.name, modelInfo.defaultInput.duration);
+  const resolution = getVideoResolution(params, modelInfo.defaultInput.resolution);
+  const generateAudio =
+    getBooleanParam(params, "generate_audio") ??
+    getBooleanParam(params, "generateAudio") ??
+    (typeof modelInfo.defaultInput.generate_audio === "boolean"
+      ? modelInfo.defaultInput.generate_audio
+      : undefined);
+  let label = modelInfo.name;
+  let quantity = duration;
+  let unit: CostLineItem["unit"] = "second";
+  let unitPriceUsd = modelInfo.pricing.unitPriceUsd;
+  let usd = duration * unitPriceUsd;
+
+  if (modelInfo.id.includes("wan-25-preview")) {
+    unitPriceUsd = getWanUnitPriceUsd(resolution);
+    label = `${modelInfo.name} (${resolution ?? "1080p"})`;
+    usd = duration * unitPriceUsd;
+  } else if (modelInfo.id.includes("kling-video")) {
+    label = `${modelInfo.name} (${duration}s)`;
+    quantity = 1;
+    unit = "clip";
+    unitPriceUsd = duration <= 5 ? 0.35 : 0.35 + (duration - 5) * 0.07;
+    usd = unitPriceUsd;
+  } else if (modelInfo.id.includes("minimax/hailuo-2.3")) {
+    label = `${modelInfo.name} (${duration}s)`;
+    quantity = 1;
+    unit = "clip";
+
+    if (duration === 6) {
+      unitPriceUsd = 0.28;
+    } else if (duration === 10) {
+      unitPriceUsd = 0.56;
+    } else {
+      throw new Error("Hailuo 2.3 Standard aceita apenas duracoes 6s ou 10s para custo confirmado.");
+    }
+
+    usd = unitPriceUsd;
+  } else if (modelInfo.id.includes("seedance-2.0")) {
+    unitPriceUsd = getSeedanceUnitPriceUsd(resolution);
+    label = `${modelInfo.name} (${resolution ?? "720p"}, audio incluso)`;
+    usd = duration * unitPriceUsd;
+  } else if (modelInfo.id.includes("veo3")) {
+    unitPriceUsd = generateAudio === false ? 0.2 : 0.4;
+    label = `${modelInfo.name} (${generateAudio === false ? "sem audio" : "com audio"})`;
+    usd = duration * unitPriceUsd;
+  }
+
+  return toCostEstimate({
+    usdBrlRate,
+    source: videoCostSource(modelInfo.name),
+    lineItems: [
+      {
+        label,
+        quantity,
+        unit,
+        unitPriceUsd,
+        usd,
+      },
+    ],
+  });
+}
+
+function estimateFalVideoActualCost({
+  model,
+  params,
+  videos,
+  usdBrlRate,
+}: {
+  model: string;
+  params: GenParams;
+  videos: GeneratedAsset[];
+  usdBrlRate: number;
+}) {
+  const actualDuration = videos.find((video) => video.durationSeconds)?.durationSeconds;
+
+  if (!actualDuration) {
+    return estimateFalVideoCost({
+      model,
+      params,
+      usdBrlRate,
+    });
+  }
+
+  return estimateFalVideoCost({
+    model,
+    params: {
+      ...params,
+      duration: actualDuration,
+    },
+    usdBrlRate,
+  });
 }
 
 export class FalProvider implements ModelProvider {
@@ -261,6 +655,20 @@ export class FalProvider implements ModelProvider {
   }
 
   estimateCost(model: string, params: GenParams): CostEstimate {
+    const videoModel = findFalVideoModel(model);
+
+    if (videoModel) {
+      return estimateFalVideoCost({
+        model: videoModel.id,
+        params,
+        usdBrlRate: this.usdBrlRate,
+      });
+    }
+
+    if (isLikelyFalVideoModel(model)) {
+      resolveFalVideoModelId(model);
+    }
+
     const resolvedModel = resolveFalImageModelId(model);
     const modelInfo = findFalImageModel(resolvedModel);
 
@@ -342,10 +750,14 @@ export class FalProvider implements ModelProvider {
       throw new Error("FAL_KEY nao configurada. Defina a chave da fal.ai antes de gerar.");
     }
 
-    const resolvedModel = resolveFalImageModelId(model);
+    const resolvedModel = findFalVideoModel(model)
+      ? getVideoEndpoint(model, params).endpoint
+      : resolveFalImageModelId(model);
     const webhookUrl = getStringParam(params, "webhookUrl");
     const response = await fal.queue.submit(resolvedModel as never, {
-      input: normalizeFalInput(resolvedModel, params),
+      input: findFalVideoModel(resolvedModel)
+        ? normalizeFalVideoInput(resolvedModel, params)
+        : normalizeFalInput(resolvedModel, params),
       webhookUrl,
     } as never);
 
@@ -375,6 +787,26 @@ export class FalProvider implements ModelProvider {
     const result = await fal.queue.result(handle.model as never, {
       requestId: handle.id,
     });
+    const videoModel = findFalVideoModel(handle.model);
+
+    if (videoModel) {
+      const videos = normalizeGeneratedVideos(result.data);
+
+      if (videos.length === 0) {
+        throw new Error("fal.ai concluiu sem retornar URL de video.");
+      }
+
+      return {
+        provider: this.id,
+        model: handle.model,
+        requestId: result.requestId,
+        images: [],
+        videos,
+        cost: this.estimateActualCost(handle.model, params, videos),
+        raw: result.data,
+      };
+    }
+
     const images = normalizeGeneratedImages(result.data);
 
     if (images.length === 0) {
@@ -403,8 +835,19 @@ export class FalProvider implements ModelProvider {
   estimateActualCost(
     model: string,
     params: GenParams,
-    images: GeneratedAsset[],
+    assets: GeneratedAsset[],
   ): CostEstimate {
+    const videoModel = findFalVideoModel(model);
+
+    if (videoModel) {
+      return estimateFalVideoActualCost({
+        model: videoModel.id,
+        params,
+        videos: assets,
+        usdBrlRate: this.usdBrlRate,
+      });
+    }
+
     const resolvedModel = resolveFalImageModelId(model);
 
     if (resolvedModel !== "fal-ai/flux/dev") {
@@ -417,7 +860,7 @@ export class FalProvider implements ModelProvider {
       throw new Error(`Modelo fal.ai nao suportado: ${model}`);
     }
 
-    const quantity = images.reduce((total, image) => {
+    const quantity = assets.reduce((total, image) => {
       if (!image.width || !image.height) {
         return total + getFluxMegapixels(params);
       }

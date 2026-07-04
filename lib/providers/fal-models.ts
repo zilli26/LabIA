@@ -287,7 +287,7 @@ export const FAL_VIDEO_MODELS = [
           label: "1080p com audio",
           unit: "second",
           unitPriceUsd: 0.682,
-          note: "Endpoint standard.",
+          note: "Endpoint standard image-to-video reconfirmado em 2026-07-04 antes da tarefa 1.",
         },
       ],
     },

@@ -70,6 +70,7 @@ Notas antes de preencher:
 - Encontrei páginas específicas para text-to-video, image-to-video e reference-to-video.
 - O preço principal é por segundo. A página text-to-video/overview lista 720p com áudio a US$0.3034/s, 720p fast com áudio a US$0.2419/s e 1080p com áudio a US$0.682/s.
 - Conflito: a página image-to-video lista Standard a US$0.3024/s, enquanto a página text-to-video/overview lista US$0.3034/s. Registrei os dois e usei o maior valor no `pricing.unitPriceUsd`.
+- Reconfirmação tarefa 1 (2026-07-04): a página pública `https://fal.ai/models/bytedance/seedance-2.0/image-to-video` mostra explicitamente "for 1080p you will be charged $0.682/second"; o `estimateCost` pode usar 1080p a US$0.682/s com essa fonte/data.
 - Durações suportadas: `auto` ou inteiro de 4 a 15 segundos.
 - Áudio: suportado nativamente; `generate_audio` defaulta para true. A página image-to-video diz que o áudio está incluído sem custo extra independente de `generate_audio`.
 - Extend nativo: a doc descreve "Video editing and extension" via reference-to-video, fornecendo vídeo de referência e descrevendo o que deve acontecer a seguir.

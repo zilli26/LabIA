@@ -7,12 +7,11 @@ import { FalProvider } from "./fal";
 import type { GenParams, GeneratedAsset } from "./model-provider";
 import { getProviderErrorMessage } from "./provider-errors";
 
-export const IMAGE_GENERATION_QUEUE = "image.generate";
+export const VIDEO_GENERATION_QUEUE = "video.generate";
 
-const DEFAULT_WORKSPACE_SLUG =
-  process.env.DEFAULT_WORKSPACE_SLUG ?? "felipe-labia";
+const VIDEO_JOB_EXPIRE_SECONDS = 1800;
 
-export type EnqueueImageGenerationInput = {
+export type EnqueueVideoGenerationInput = {
   workspaceId: string;
   brandId?: string;
   model: string;
@@ -22,7 +21,7 @@ export type EnqueueImageGenerationInput = {
   flowNodeId?: string;
 };
 
-export type ImageGenerationJobPayload = {
+export type VideoGenerationJobPayload = {
   generationId: string;
 };
 
@@ -65,30 +64,18 @@ async function createStartedBoss() {
     console.error(error);
   });
   await boss.start();
-  await boss.createQueue(IMAGE_GENERATION_QUEUE, {
+  await boss.createQueue(VIDEO_GENERATION_QUEUE, {
     retryLimit: 1,
-    retryDelay: 5,
+    retryDelay: 10,
     retryBackoff: true,
-    expireInSeconds: 900,
+    // Video pode levar de 30s a 5min; deixamos folga para fila, polling e upload.
+    expireInSeconds: VIDEO_JOB_EXPIRE_SECONDS,
     retentionSeconds: 60 * 60 * 24 * 14,
   });
   return boss;
 }
 
-export async function ensureDefaultImageWorkspace() {
-  return prisma.workspace.upsert({
-    where: {
-      slug: DEFAULT_WORKSPACE_SLUG,
-    },
-    update: {},
-    create: {
-      name: "Felipe Zilli",
-      slug: DEFAULT_WORKSPACE_SLUG,
-    },
-  });
-}
-
-export async function enqueueImageGenerationJob(input: EnqueueImageGenerationInput) {
+export async function enqueueVideoGenerationJob(input: EnqueueVideoGenerationInput) {
   const provider = new FalProvider();
   const params = buildGenerationParams(input);
   const estimatedCost = provider.estimateCost(input.model, params);
@@ -110,16 +97,16 @@ export async function enqueueImageGenerationJob(input: EnqueueImageGenerationInp
 
   try {
     const queueJobId = await boss.send(
-      IMAGE_GENERATION_QUEUE,
+      VIDEO_GENERATION_QUEUE,
       {
         generationId: generation.id,
       },
       {
         singletonKey: generation.id,
         retryLimit: 1,
-        retryDelay: 5,
+        retryDelay: 10,
         retryBackoff: true,
-        expireInSeconds: 900,
+        expireInSeconds: VIDEO_JOB_EXPIRE_SECONDS,
       },
     );
 
@@ -142,9 +129,9 @@ export async function enqueueImageGenerationJob(input: EnqueueImageGenerationInp
   }
 }
 
-async function persistGeneratedImage({
+async function persistGeneratedVideo({
   generation,
-  image,
+  video,
   index,
 }: {
   generation: {
@@ -155,15 +142,15 @@ async function persistGeneratedImage({
     provider: string;
     model: string;
   };
-  image: GeneratedAsset;
+  video: GeneratedAsset;
   index: number;
 }) {
   const uploaded = await uploadRemoteAssetToSupabase({
-    sourceUrl: image.url,
+    sourceUrl: video.url,
     workspaceId: generation.workspaceId,
     generationId: generation.id,
-    contentType: image.contentType,
-    fileName: image.fileName,
+    contentType: video.contentType,
+    fileName: video.fileName,
   });
 
   return prisma.asset.create({
@@ -171,29 +158,30 @@ async function persistGeneratedImage({
       workspaceId: generation.workspaceId,
       brandId: generation.brandId,
       generationId: generation.id,
-      type: "IMAGE",
+      type: "VIDEO",
       origin: "GENERATED",
       url: uploaded.url,
       storageBucket: uploaded.bucket,
       storagePath: uploaded.path,
       contentType: uploaded.contentType,
-      width: image.width,
-      height: image.height,
+      width: video.width,
+      height: video.height,
       sizeBytes: uploaded.sizeBytes,
       prompt: generation.prompt,
       provider: generation.provider,
       model: generation.model,
       metadata: toJson({
-        sourceUrl: image.url,
-        sourceFileName: image.fileName,
-        sourceFileSize: image.fileSize,
+        sourceUrl: video.url,
+        sourceFileName: video.fileName,
+        sourceFileSize: video.fileSize,
+        durationSeconds: video.durationSeconds,
         outputIndex: index,
       }),
     },
   });
 }
 
-export async function processImageGeneration(generationId: string) {
+export async function processVideoGeneration(generationId: string) {
   const generation = await prisma.generation.findUnique({
     where: {
       id: generationId,
@@ -237,13 +225,20 @@ export async function processImageGeneration(generationId: string) {
       },
     });
 
-    const result = await provider.waitForResult(handle, params);
+    const result = await provider.waitForResult(handle, params, {
+      pollIntervalMs: 2000,
+    });
+    const videos = result.videos ?? [];
+
+    if (videos.length === 0) {
+      throw new Error("fal.ai concluiu sem retornar video.");
+    }
 
     await Promise.all(
-      result.images.map((image, index) =>
-        persistGeneratedImage({
+      videos.map((video, index) =>
+        persistGeneratedVideo({
           generation,
-          image,
+          video,
           index,
         }),
       ),
@@ -281,48 +276,17 @@ export async function processImageGeneration(generationId: string) {
   }
 }
 
-export async function runImageGenerationInline(input: EnqueueImageGenerationInput) {
-  const provider = new FalProvider();
-  const params = buildGenerationParams(input);
-  const estimatedCost = provider.estimateCost(input.model, params);
-  const generation = await prisma.generation.create({
-    data: {
-      workspaceId: input.workspaceId,
-      brandId: input.brandId,
-      provider: provider.id,
-      model: input.model,
-      prompt: input.prompt,
-      params: toJson(params),
-      estimatedCostUsd: estimatedCost.usd,
-      estimatedCostBrl: estimatedCost.brl,
-      flowRunId: input.flowRunId,
-      flowNodeId: input.flowNodeId,
-    },
-  });
-
-  await processImageGeneration(generation.id);
-
-  return prisma.generation.findUniqueOrThrow({
-    where: {
-      id: generation.id,
-    },
-    include: {
-      assets: true,
-    },
-  });
-}
-
-export async function startImageGenerationWorker() {
+export async function startVideoGenerationWorker() {
   const boss = await createStartedBoss();
 
-  await boss.work<ImageGenerationJobPayload>(
-    IMAGE_GENERATION_QUEUE,
+  await boss.work<VideoGenerationJobPayload>(
+    VIDEO_GENERATION_QUEUE,
     {
       batchSize: 1,
       pollingIntervalSeconds: 2,
     },
-    async (jobs: Job<ImageGenerationJobPayload>[]) => {
-      await Promise.all(jobs.map((job) => processImageGeneration(job.data.generationId)));
+    async (jobs: Job<VideoGenerationJobPayload>[]) => {
+      await Promise.all(jobs.map((job) => processVideoGeneration(job.data.generationId)));
     },
   );
 

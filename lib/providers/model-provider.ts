@@ -116,6 +116,7 @@ export type GeneratedAsset = {
   fileSize?: number;
   width?: number;
   height?: number;
+  durationSeconds?: number;
 };
 
 export type GenerationResult = {
@@ -123,6 +124,7 @@ export type GenerationResult = {
   model: string;
   requestId: string;
   images: GeneratedAsset[];
+  videos?: GeneratedAsset[];
   cost: CostEstimate;
   raw: unknown;
 };
