@@ -1,7 +1,19 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-03** (sessão Claude - PRIMEIRA IMAGEM REAL gerada; worker revisado e commitado).
+> Última atualização: **2026-07-03** (sessão Claude - E2 aberta: spec do módulo 02 revisada e APROVADA pelo Felipe; prompt da tarefa 0 gerado para o Codex).
+
+## E2 aberta — spec aprovada (2026-07-03, sessão de orquestração)
+
+Spec do módulo 02-videos revisada com o Felipe e **aprovada** ("pra cima bora"). Norte declarado por ele: conter tudo que precisamos para fazer os fluxos da melhor maneira e **nunca desperdiçar dinheiro**. Decisões dele nesta sessão (registradas em `modulos/02-videos/decisoes.md`):
+
+1. **Catálogo amplo, gate no gasto:** Wan 2.5, Kling 2.5, Hailuo, Seedance E Veo 3 no select com preço (comparar chinês × ocidental é o produto); a proteção é a aprovação explícita dele antes de cada geração, não cortar modelo do catálogo. (Reverteu proposta do Claude de tirar o Veo 3.)
+2. **Áudio desde o início:** som é parte do vídeo. Toggle de áudio nativo por modelo + trilha/voz na Montagem. Limite técnico (P2): frame-chaining não preserva áudio contínuo entre clipes → continuidade sonora vem da trilha, e a direção dos cortes segue o áudio (emendas em beats).
+3. **Expertise é entregável:** criado `modulos/02-videos/TECNICAS.md` (doc vivo) — direção de cortes com áudio, consistência entre clipes, receitas replicáveis (tutoriais) e log de experimentos. Toda geração paga registra prompt/custo/aprendizado.
+
+Escada de validação combinada: 1 clipe Wan ~R$1,35 → teste de emenda em beat → fluxo 30s+ ~R$8,24 (6 clipes Wan + imagem). Cada degrau com aprovação do Felipe NA HORA; aprovação de uma geração não vale para a próxima.
+
+**Prompt da tarefa 0 (mapear catálogo fal.ai: endpoints, preços com/sem áudio, durações — ZERO geração) foi entregue ao Felipe no chat da sessão para colar no Codex.** Se perdido, regenerar a partir do CONSTRUCAO.md tarefa 0 do módulo 02.
 
 ## Marco: primeira imagem real (2026-07-03)
 
@@ -54,11 +66,13 @@ Site em produção: `https://labia-zilli26s-projects.vercel.app` (projeto `labia
 
 ## Por onde retomar (nesta ordem)
 
-**Decisão do Felipe (2026-07-03): E1 declarada boa o suficiente; começar a E2 (vídeo) em sessão nova.**
+**E2 em andamento, spec APROVADA (2026-07-03). SDD cumprido — código liberado seguindo a ordem do CONSTRUCAO.md do módulo 02.**
 
-1. **E2 — Nós de Vídeo:** SDD obrigatório — revisar/aprovar `modulos/02-videos/ESPECIFICACAO.md` e `CONSTRUCAO.md` com o Felipe ANTES de código. Base: `pesquisas/P2-video-continuo-30s.md` e `docs/06-PROVEDORES.md` (Wan 2.5 ~R$1,35/5s, Kling 2.5 ~R$1,90/5s, Veo 3 ~R$10,80/5s). Nós img2video + extend encadeáveis; critério da etapa: vídeo 30s+ coerente a partir de uma imagem, custo total visível ANTES de rodar. REGRA: nenhuma geração de vídeo sem aprovação explícita do Felipe (vídeo é ordem de grandeza mais caro que imagem).
-2. **Débitos E1 (não bloqueiam E2, não esquecer):** retry visual por nó; comparação lado a lado (tarefa 6, adiada); imagem renderizando no nó em execução via UI pelo Felipe (nunca observada visualmente); Deployment Protection a desativar quando ele quiser site público.
-3. **Ambiente segue o mesmo** (seção Ambiente abaixo). Vercel: env vars via bash `printf`, nunca pipe PowerShell.
+1. **Tarefa 0 no Codex:** Felipe cola o prompt (mapear catálogo de vídeo fal.ai — endpoints, preços com/sem áudio, durações, ZERO geração). Depois: Claude revisa a entrega contra os critérios (todo número com fonte+data, lint/typecheck/testes limpos, nenhuma geração executada) e commita.
+2. **Tarefas 1-8 do CONSTRUCAO.md** em ordem (fila `video.generate`, nó Gerar Vídeo, Text2Video, serviço ffmpeg, Extend, Montagem com áudio, modal de custo total, retry por nó). Prompts do Codex sempre com a instrução de NUNCA rodar geração real.
+3. **Gerações reais:** escada 1 clipe (~R$1,35) → emenda em beat → 30s+ (~R$8,24), cada uma com custo em R$ declarado e ok do Felipe na hora. Cada geração alimenta o log do `TECNICAS.md`.
+4. **Débitos E1 (não bloqueiam E2, não esquecer):** retry visual por nó (parte será quitada pela tarefa 8 da E2); comparação lado a lado (tarefa 6 E1, adiada); imagem renderizando no nó via UI observada pelo Felipe; Deployment Protection a desativar quando ele quiser site público.
+5. **Ambiente segue o mesmo** (seção Ambiente abaixo). Vercel: env vars via bash `printf`, nunca pipe PowerShell.
 
 ## Ambiente (para quem chegar do zero)
 

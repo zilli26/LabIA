@@ -13,7 +13,7 @@
 
 - **Validado na P2**: frame-chaining é o padrão do mercado (Kling extend nativo 4-5s/chamada até ~3min; Veo "Frames-to-Video"). Nossa implementação é modelo-agnóstica (funciona com qualquer img2video); onde existir extend nativo, oferecer como opção.
 - **Aviso de degradação**: qualidade consistente até ~30s; degrada após ~60s de extends — a UI avisa a partir do 6º encadeamento.
-- **Áudio**: chaining não preserva áudio entre clipes — trilha/voz entram no Nó Montagem (ffmpeg), nunca na geração.
+- **Áudio**: modelos com áudio nativo (Veo 3, Wan 2.5 — confirmar na tarefa 0) geram som por clipe, mas o chaining NÃO preserva áudio contínuo entre clipes (P2). Continuidade sonora vem da trilha/voz no Nó Montagem (ffmpeg), e a direção dos cortes segue o áudio: emendas entre clipes planejadas para cair em beats/pausas da trilha (ver `TECNICAS.md`).
 - Extração de último frame: server-side (ffmpeg), salvo como Asset interno do FlowRun.
 - Consistência entre clipes: prompt de continuação herda descrição de estilo/personagem do nó anterior (campo "contexto de cena" propagado pela aresta) — técnica validada na pesquisa P2.
 - Falha num clipe do meio: fluxo pausa naquele nó; usuário pode retry só do nó (não paga tudo de novo).
