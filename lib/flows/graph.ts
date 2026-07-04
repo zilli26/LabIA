@@ -5,7 +5,8 @@ export type LabNodeKind =
   | "note"
   | "asset-output"
   | "prompt"
-  | "image-generation";
+  | "image-generation"
+  | "video-generation";
 
 export type LabFlowNodeData = {
   kind: LabNodeKind;

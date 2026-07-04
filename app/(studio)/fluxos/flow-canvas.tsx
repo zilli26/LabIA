@@ -113,6 +113,7 @@ const nodeIcons: Record<LabNodeKind, typeof FileText> = {
   "text-input": FileText,
   prompt: MessageSquareText,
   "image-generation": ImageIcon,
+  "video-generation": Clapperboard,
   note: StickyNote,
   "asset-output": UploadCloud,
 };
@@ -162,11 +163,6 @@ const fallbackAddableNodes: SerializableNodeDefinition[] = [
 
 const upcomingNodes = [
   {
-    label: "Gerar vídeo",
-    accent: "var(--lab-node-video)",
-    icon: Clapperboard,
-  },
-  {
     label: "Copy da marca",
     accent: "var(--lab-node-copy)",
     icon: PenLine,
@@ -191,6 +187,15 @@ function getDefaultParams(kind: LabNodeKind) {
 
   if (kind === "image-generation") {
     return { model: "fal-ai/flux/dev" };
+  }
+
+  if (kind === "video-generation") {
+    return {
+      model: "fal-ai/wan-25-preview/image-to-video",
+      prompt: "",
+      duration: "5",
+      resolution: "1080p",
+    };
   }
 
   return undefined;
@@ -449,7 +454,11 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
               ? outputs.generationId
               : undefined;
 
-          if (node.data.kind === "image-generation" && generationId) {
+          if (
+            (node.data.kind === "image-generation" ||
+              node.data.kind === "video-generation") &&
+            generationId
+          ) {
             void refreshGeneration(generationId, node.id);
           }
 
@@ -466,7 +475,9 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
                     ? outputs.queueJobId
                     : undefined,
                 generationStatus:
-                  node.data.kind === "image-generation" && generationId
+                  (node.data.kind === "image-generation" ||
+                    node.data.kind === "video-generation") &&
+                  generationId
                     ? "queued"
                     : undefined,
                 errorMessage: runNode.error ?? undefined,

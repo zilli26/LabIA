@@ -1,12 +1,12 @@
 # 02-Vídeos — Construção
 
-**Status:** tarefa 1 implementada e validada por testes unitários/lint/typecheck (2026-07-04); nenhuma geração executada · **Etapa:** E2 · **Depende de:** E1 fechada (canvas, worker unificado, Generation/Asset/CreditLedger, ModelProvider fal.ai).
+**Status:** tarefa 2 implementada e validada por testes unitários/lint/typecheck + preview visual sem worker (2026-07-04); nenhuma geração executada · **Etapa:** E2 · **Depende de:** E1 fechada (canvas, worker unificado, Generation/Asset/CreditLedger, ModelProvider fal.ai).
 
 ## Ordem de tarefas
 
 0. [x] **Mapeamento de catálogo (SEM geração):** confirmar nas docs públicas da fal.ai o endpoint exato, preço por segundo/clipe (com e sem áudio), durações suportadas e suporte a áudio nativo de: Wan 2.5, Kling 2.5, Hailuo/MiniMax, Seedance, Veo 3. Saída: `FAL_VIDEO_MODELS` em `lib/providers/fal-models.ts` + tabela atualizada em `docs/06-PROVEDORES.md` com fonte e data. **Proibido rodar qualquer geração.**
 1. [x] Estimativa de custo de vídeo no `ModelProvider` (por segundo/clipe, com/sem áudio) + fila `video.generate` no worker unificado, no padrão de `image.generate` (Generation, custo estimado/real, erro legível). Concluída por testes unitários, sem geração real.
-2. Nó Gerar Vídeo (img2video): imagem de entrada (nó ou asset), prompt de movimento, select de modelo com preço, duração, toggle áudio. Job assíncrono com status por polling (padrão E1).
+2. [x] Nó Gerar Vídeo (img2video): imagem de entrada (nó ou asset), prompt de movimento, select de modelo com preço, duração, toggle áudio. Job assíncrono com status por polling (padrão E1). Concluído por testes unitários e preview visual sem executar fluxo de vídeo.
 3. Nó Text2Video (reuso do 2 sem entrada de imagem).
 4. Serviço interno de ffmpeg (binário via `ffmpeg-static`): extração de último frame + concat + mix de trilha.
 5. Nó Estender Vídeo: last-frame + contexto de cena propagado pela aresta + aviso de degradação no 6º encadeamento.

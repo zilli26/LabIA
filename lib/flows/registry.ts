@@ -4,6 +4,7 @@ import type {
 } from "@/lib/flows/types";
 import { imageNodeDefinitions } from "@/lib/flows/image-nodes";
 import { utilityNodeDefinitions } from "@/lib/flows/utility-nodes";
+import { videoNodeDefinitions } from "@/lib/flows/video-nodes";
 
 export class NodeDefinitionRegistry {
   private readonly definitions = new Map<string, NodeDefinition>();
@@ -41,7 +42,7 @@ export class NodeDefinitionRegistry {
 }
 
 export const nodeDefinitionRegistry = new NodeDefinitionRegistry(
-  [...utilityNodeDefinitions, ...imageNodeDefinitions],
+  [...utilityNodeDefinitions, ...imageNodeDefinitions, ...videoNodeDefinitions],
 );
 
 export function getNodeDefinition(type: string) {

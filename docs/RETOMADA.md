@@ -1,7 +1,39 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04** (sessão Codex - tarefa 1 da E2 implementada por testes unitários, sem geração).
+> Última atualização: **2026-07-04** (sessão Codex - tarefa 2 da E2 implementada por testes unitários + preview visual, sem geração).
+
+## E2 tarefa 2 concluída — nó `Gerar Vídeo` img2video no canvas (2026-07-04, Codex)
+
+Implementação da tarefa 2 do módulo `02-videos` concluída sem chamar API paga, worker, smoke test ou execução de fluxo com vídeo. Saídas:
+
+- `lib/flows/video-nodes.ts`: criado o NodeDefinition `video-generation`/`Gerar Vídeo`, com input `image`, output `video`, `estimateCost` delegando para `FalProvider.estimateCost`, enqueue via `enqueueVideoGenerationJob` e output espelhando o nó de imagem (`generationId`, `queueJobId`, `status`, `model`, `estimatedCost`).
+- Espera assíncrona da imagem upstream: quando o input vem do nó `Gerar Imagem` com `generationId`, o nó de vídeo faz polling da `Generation` até `DONE`, lê o `Asset` de imagem e só então enfileira vídeo; `FAILED`, timeout ou ausência de imagem falham com erro legível sem enfileirar nada. Decisão registrada em `modulos/02-videos/decisoes.md`.
+- `lib/flows/registry.ts` e `lib/flows/graph.ts`: `video-generation` registrado no registry vivo e adicionado aos kinds do canvas.
+- `components/nodes/lab-flow-node.tsx` e `app/(studio)/fluxos/flow-canvas.tsx`: UI do nó com select dos 5 modelos, preços legíveis, prompt de movimento, duração por modelo, resolução só em Wan/Seedance, toggle `Gerar áudio` só em Seedance/Veo 3 e chip de custo em R$ via estimativa do fluxo.
+- `tests/flows/video-nodes.test.ts`: testes unitários com mock de Prisma/fila cobrindo delegação de custo por modelo, imagem DONE, imagem FAILED, falta de imagem e timeout.
+
+Validação desta sessão:
+
+- `npx vitest run tests/flows/video-nodes.test.ts tests/flows/registry.test.ts` -> 18 testes verdes.
+- `npm run typecheck` -> limpo.
+- `npx vitest run` -> 76 testes verdes.
+- `npm run lint` -> limpo.
+- `npm run dev` sem worker: paleta mostrou `Gerar Vídeo` vindo de `/api/flows/node-definitions`; o nó exibiu os 5 modelos, durações/resolução/áudio condicionais e chip de custo em R$ mudando. Veo 3 caiu de ~R$17,28 com áudio para ~R$8,64 sem áudio.
+- Consulta de leitura no banco para modelos de vídeo retornou `count: 0`; nenhuma `Generation` de vídeo foi criada e nenhum job de vídeo ficou enfileirado.
+
+Próxima ação: tarefa 3 da E2 (`Text2Video`), mantendo a regra de zero geração real sem aprovação explícita do Felipe.
+
+### Revisão Claude da tarefa 2 (2026-07-04) — APROVADA e commitada
+
+Validação externa independente (não aceitou a auto-declaração):
+
+- Lint, typecheck e os 76 testes re-executados pelo revisor — verdes.
+- **Canvas real no browser** (dev server SEM worker): paleta mostra "Gerar Vídeo" vindo do registry; 5 modelos no select com preço legível; Wan default com chip ~R$4,05 (5s×US$0,15×5,40 — exato); Veo 3 com durações 4/6/8s, toggle de áudio e R$17,28 com áudio / R$8,64 sem (dobro/metade correto); Hailuo com 6s/10s, SEM toggle de áudio e chip R$1,51 (6s×US$0,28×5,40 — exato); soma do fluxo no topo atualizou para ~R$1,65 (imagem + vídeo). Acentos PT-BR corretos. Zero erros de console. Screenshot conferido. O nó de teste NÃO foi salvo no fluxo.
+- **Banco verificado direto via Prisma pelo revisor**: 0 Generations de vídeo e 0 jobs pendentes em `pgboss.job` na fila `video.generate`.
+- Código inspecionado: espera da imagem upstream com poll+timeout de 10min e falha legível sem enfileirar — implementação fiel ao ponto de design do prompt.
+
+Nenhuma correção necessária. Observação (débito E1, não regressão): o título do fluxo de teste segue com mojibake no banco (`Valida??o worker ?nico`).
 
 ## E2 tarefa 1 concluída — custo de vídeo + fila `video.generate` (2026-07-04, Codex)
 
@@ -121,8 +153,8 @@ Site em produção: `https://labia-zilli26s-projects.vercel.app` (projeto `labia
 
 **E2 em andamento, spec APROVADA (2026-07-03). SDD cumprido — código liberado seguindo a ordem do CONSTRUCAO.md do módulo 02.**
 
-1. **Tarefa 0 no Codex:** Felipe cola o prompt (mapear catálogo de vídeo fal.ai — endpoints, preços com/sem áudio, durações, ZERO geração). Depois: Claude revisa a entrega contra os critérios (todo número com fonte+data, lint/typecheck/testes limpos, nenhuma geração executada) e commita.
-2. **Tarefas 1-8 do CONSTRUCAO.md** em ordem (fila `video.generate`, nó Gerar Vídeo, Text2Video, serviço ffmpeg, Extend, Montagem com áudio, modal de custo total, retry por nó). Prompts do Codex sempre com a instrução de NUNCA rodar geração real.
+1. **Próxima tarefa no Codex: tarefa 3 (`Text2Video`)** do `modulos/02-videos/CONSTRUCAO.md`, reaproveitando catálogo/custo/fila e mantendo a instrução de NUNCA rodar geração real.
+2. **Tarefas 4-8 do CONSTRUCAO.md** em ordem (serviço ffmpeg, Extend, Montagem com áudio, modal de custo total, retry por nó). Prompts do Codex sempre com a instrução de NUNCA rodar geração real.
 3. **Gerações reais:** escada 1 clipe (~R$1,35) → emenda em beat → 30s+ (~R$8,24), cada uma com custo em R$ declarado e ok do Felipe na hora. Cada geração alimenta o log do `TECNICAS.md`.
 4. **Débitos E1 (não bloqueiam E2, não esquecer):** retry visual por nó (parte será quitada pela tarefa 8 da E2); comparação lado a lado (tarefa 6 E1, adiada); imagem renderizando no nó via UI observada pelo Felipe; Deployment Protection a desativar quando ele quiser site público.
 5. **Ambiente segue o mesmo** (seção Ambiente abaixo). Vercel: env vars via bash `printf`, nunca pipe PowerShell.
