@@ -48,16 +48,17 @@ Fluxo Prompt -> Gerar Imagem rodou de ponta a ponta com saldo real: FlowRun `cmr
 - `npm run lint` -> limpo.
 - `npm run typecheck` -> limpo.
 
-## Deploy Vercel (2026-07-03)
+## Deploy Vercel (2026-07-03) — FUNCIONANDO
 
-Site em produção: `https://labia-zilli26s-projects.vercel.app` (projeto `labia`, conta `zilli26`, deploy via CLI, 9 env vars de produção configuradas). **Pendência: Deployment Protection ativa por padrão** — Felipe precisa desativar em Settings -> Deployment Protection -> Vercel Authentication -> Disabled. Worker continua local (`npm run worker` ou `iniciar-labia.bat`); o site na nuvem enfileira no mesmo Postgres/Supabase, então geração só processa com o worker ligado na máquina do Felipe. `iniciar-labia.bat` criado na raiz: sobe dev + worker e abre o browser.
+Site em produção: `https://labia-zilli26s-projects.vercel.app` (projeto `labia`, conta `zilli26`). **Biblioteca confirmada funcionando pelo Felipe** após correção: as env vars subiram contaminadas com `\r` (pipe do PowerShell) causando `PrismaClientInitializationError`; re-subidas via bash `printf` e redeploy. Lição: env vars para Vercel no Windows SEMPRE via `printf '%s'`, nunca pipe do PowerShell. Deployment Protection segue ativa (só o Felipe logado na Vercel vê; desativar em Settings -> Deployment Protection quando quiser acesso público). Worker continua local (`iniciar-labia.bat` na raiz sobe dev + worker); o site na nuvem enfileira no mesmo Postgres, geração processa só com worker ligado.
 
 ## Por onde retomar (nesta ordem)
 
-1. **Felipe executa pela UI:** F5 no canvas -> conectar (handles agora visíveis) -> Executar; confirmar a imagem renderizando NO NÓ (única parte ainda não vista com geração real). Lembrete: cada execução gasta (~R$0,14 FLUX dev) — só com aprovação dele.
-2. **Facilitar o uso diário:** criar `iniciar-labia.bat` (sobe `npm run dev` + `npm run worker`); especificar deploy Vercel (UI no ar; worker continua local — Vercel não roda processo permanente).
-3. **Retry visual por nó** (último critério de aceite aberto além da comparação adiada).
-4. **Decidir com o Felipe:** reabrir tarefa 6 (comparação) para fechar E1, ou declarar E1 "boa o suficiente" e ir para E2 (vídeo).
+**Decisão do Felipe (2026-07-03): E1 declarada boa o suficiente; começar a E2 (vídeo) em sessão nova.**
+
+1. **E2 — Nós de Vídeo:** SDD obrigatório — revisar/aprovar `modulos/02-videos/ESPECIFICACAO.md` e `CONSTRUCAO.md` com o Felipe ANTES de código. Base: `pesquisas/P2-video-continuo-30s.md` e `docs/06-PROVEDORES.md` (Wan 2.5 ~R$1,35/5s, Kling 2.5 ~R$1,90/5s, Veo 3 ~R$10,80/5s). Nós img2video + extend encadeáveis; critério da etapa: vídeo 30s+ coerente a partir de uma imagem, custo total visível ANTES de rodar. REGRA: nenhuma geração de vídeo sem aprovação explícita do Felipe (vídeo é ordem de grandeza mais caro que imagem).
+2. **Débitos E1 (não bloqueiam E2, não esquecer):** retry visual por nó; comparação lado a lado (tarefa 6, adiada); imagem renderizando no nó em execução via UI pelo Felipe (nunca observada visualmente); Deployment Protection a desativar quando ele quiser site público.
+3. **Ambiente segue o mesmo** (seção Ambiente abaixo). Vercel: env vars via bash `printf`, nunca pipe PowerShell.
 
 ## Ambiente (para quem chegar do zero)
 
