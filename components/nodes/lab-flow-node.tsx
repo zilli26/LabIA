@@ -6,6 +6,7 @@ import { Handle, Position, useReactFlow } from "@xyflow/react";
 import {
   AlertTriangle,
   Clapperboard,
+  Film,
   FileText,
   MessageSquareText,
   StickyNote,
@@ -51,6 +52,11 @@ const nodeMeta: Record<
     label: "extend",
     accent: "var(--lab-node-video)",
     Icon: Clapperboard,
+  },
+  "video-assembly": {
+    label: "montagem",
+    accent: "var(--lab-node-video)",
+    Icon: Film,
   },
   text2video: {
     label: "texto vídeo",
@@ -395,6 +401,42 @@ function VideoControls({
   );
 }
 
+function AssemblyControls({ params }: { params: Record<string, unknown> }) {
+  const assetUrl = getString(params.assetUrl);
+  const assemblyStatus = getString(params.assemblyStatus);
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="rounded-control border border-lab-border bg-lab-surface-1 px-2.5 py-2">
+        <p className="text-xs leading-5 text-lab-text-dim">
+          Conecte os clipes na ordem da esquerda para a direita.
+        </p>
+        <div className="mt-2 inline-flex rounded-full bg-lab-reagent-dim px-2 py-1 font-mono text-[11px] text-lab-reagent-bright">
+          custo R$0 (montagem local)
+        </div>
+      </div>
+
+      {assetUrl ? (
+        <div className="overflow-hidden rounded-control border border-lab-border bg-lab-surface-1">
+          <video src={assetUrl} controls className="aspect-video w-full object-cover" />
+        </div>
+      ) : (
+        <div className="flex h-20 items-center justify-center rounded-control border border-dashed border-lab-border bg-lab-surface-1 px-3 text-center text-xs text-lab-text-muted">
+          {assemblyStatus === "done"
+            ? "vídeo montado indisponível"
+            : "A montagem exige pelo menos dois clipes."}
+        </div>
+      )}
+
+      {getString(params.errorMessage) ? (
+        <p className="rounded-control border border-lab-danger/40 bg-lab-surface-1 px-2 py-1.5 text-xs text-lab-danger">
+          {getString(params.errorMessage)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function LabFlowNodeComponent({
   id,
   data,
@@ -561,6 +603,10 @@ export function LabFlowNodeComponent({
                   : "text"
             }
           />
+        ) : null}
+
+        {data.kind === "video-assembly" ? (
+          <AssemblyControls params={params} />
         ) : null}
       </div>
 

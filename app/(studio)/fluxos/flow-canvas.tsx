@@ -19,6 +19,7 @@ import {
 } from "@xyflow/react";
 import {
   Clapperboard,
+  Film,
   FileText,
   Image as ImageIcon,
   Loader2,
@@ -116,6 +117,7 @@ const nodeIcons: Record<LabNodeKind, typeof FileText> = {
   "image-generation": ImageIcon,
   "video-generation": Clapperboard,
   "video-extend": Clapperboard,
+  "video-assembly": Film,
   text2video: Clapperboard,
   note: StickyNote,
   "asset-output": UploadCloud,
@@ -209,6 +211,10 @@ function getDefaultParams(kind: LabNodeKind) {
       duration: "5",
       resolution: "1080p",
     };
+  }
+
+  if (kind === "video-assembly") {
+    return {};
   }
 
   if (kind === "text2video") {
@@ -502,6 +508,19 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
             typeof outputs.generationId === "string"
               ? outputs.generationId
               : undefined;
+          const output = getRecord(outputs.output);
+          const assetId =
+            typeof outputs.assetId === "string"
+              ? outputs.assetId
+              : typeof output.assetId === "string"
+                ? output.assetId
+                : undefined;
+          const assetUrl =
+            typeof outputs.url === "string"
+              ? outputs.url
+              : typeof output.url === "string"
+                ? output.url
+                : undefined;
 
           if (
             (node.data.kind === "image-generation" ||
@@ -524,6 +543,12 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
                 queueJobId:
                   typeof outputs.queueJobId === "string"
                     ? outputs.queueJobId
+                    : undefined,
+                assetId,
+                assetUrl,
+                assemblyStatus:
+                  node.data.kind === "video-assembly" && assetId
+                    ? "done"
                     : undefined,
                 generationStatus:
                   (node.data.kind === "image-generation" ||

@@ -2,6 +2,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db/prisma";
 import type { NodeDefinition } from "@/lib/flows/types";
 import { zeroCost } from "@/lib/flows/types";
@@ -99,6 +101,10 @@ function getDirectImageUrl(value: unknown): string | undefined {
 function getGenerationId(value: unknown): string | undefined {
   const record = getRecord(value);
   return record ? getString(record.generationId) : undefined;
+}
+
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 function buildVideoParams({
@@ -312,6 +318,47 @@ async function resolveUpstreamVideoUrl({
   };
 }
 
+async function resolveAssemblyClip(
+  input: unknown,
+  params: Record<string, unknown>,
+) {
+  const generationId = getGenerationId(input);
+
+  if (generationId) {
+    const assetUrl = await waitForGenerationAssetUrl({
+      generationId,
+      assetType: "VIDEO",
+      generationLabel: "vídeo",
+      waitingLabel: "o vídeo",
+      readyLabel: "pronto",
+      notQueuedMessage: "Montagem não criada.",
+      timeoutMs:
+        getNumber(params.videoWaitTimeoutMs) ?? DEFAULT_GENERATION_WAIT_TIMEOUT_MS,
+      pollIntervalMs:
+        getNumber(params.videoPollIntervalMs) ??
+        DEFAULT_GENERATION_POLL_INTERVAL_MS,
+    });
+
+    return {
+      generationId,
+      assetUrl,
+    };
+  }
+
+  const directUrl = getDirectImageUrl(input);
+
+  if (directUrl) {
+    return {
+      generationId: undefined,
+      assetUrl: directUrl,
+    };
+  }
+
+  throw new Error(
+    "Clipe inválido na Montagem. Conecte vídeos prontos ou nós de vídeo com generationId.",
+  );
+}
+
 function getExtensionFromContentType(contentType: string) {
   if (contentType.includes("mp4")) {
     return "mp4";
@@ -328,7 +375,13 @@ function getExtensionFromContentType(contentType: string) {
   return "mp4";
 }
 
-async function downloadVideoToTemp(sourceUrl: string) {
+async function downloadVideoToTemp(
+  sourceUrl: string,
+  options: {
+    directory?: string;
+    fileBaseName?: string;
+  } = {},
+) {
   const response = await fetch(sourceUrl);
 
   if (!response.ok) {
@@ -338,18 +391,27 @@ async function downloadVideoToTemp(sourceUrl: string) {
   const contentType =
     response.headers.get("content-type") ?? "application/octet-stream";
   const bytes = Buffer.from(await response.arrayBuffer());
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "labia-video-extend-"));
+  const directory =
+    options.directory ??
+    (await fs.mkdtemp(path.join(os.tmpdir(), "labia-video-extend-")));
   const videoPath = path.join(
     directory,
-    `upstream.${getExtensionFromContentType(contentType)}`,
+    `${options.fileBaseName ?? "upstream"}.${getExtensionFromContentType(contentType)}`,
   );
 
   await fs.writeFile(videoPath, bytes);
 
   return {
     videoPath,
-    cleanup: () => fs.rm(directory, { recursive: true, force: true }),
+    cleanup: () =>
+      options.directory
+        ? Promise.resolve()
+        : fs.rm(directory, { recursive: true, force: true }),
   };
+}
+
+function normalizeClipInputs(input: unknown) {
+  return Array.isArray(input) ? input : [input];
 }
 
 function buildContinuationPrompt({
@@ -552,6 +614,117 @@ export const videoNodeDefinitions: NodeDefinition[] = [
     ui: {
       componentKey: "labNode",
       kind: "video-extend",
+    },
+  },
+  {
+    type: "video-assembly",
+    label: "Montagem",
+    description: "Concatena clipes localmente em um MP4 único com custo R$0.",
+    inputs: [
+      {
+        id: "input",
+        label: "Clipes",
+        type: "video",
+        required: true,
+        multiple: true,
+      },
+    ],
+    outputs: [
+      {
+        id: "output",
+        label: "Vídeo",
+        type: "video",
+      },
+    ],
+    estimateCost() {
+      return zeroCost;
+    },
+    async execute(ctx) {
+      const clipInputs = normalizeClipInputs(ctx.inputs.input);
+
+      if (clipInputs.length < 2) {
+        throw new Error("Conecte ao menos dois clipes para montar.");
+      }
+
+      const resolvedClips = [];
+
+      for (const clipInput of clipInputs) {
+        resolvedClips.push(await resolveAssemblyClip(clipInput, ctx.params));
+      }
+
+      const tempDirectory = await fs.mkdtemp(
+        path.join(os.tmpdir(), "labia-video-assembly-"),
+      );
+
+      try {
+        const tempVideos = await Promise.all(
+          resolvedClips.map((clip, index) =>
+            downloadVideoToTemp(clip.assetUrl, {
+              directory: tempDirectory,
+              fileBaseName: `clip-${String(index + 1).padStart(3, "0")}`,
+            }),
+          ),
+        );
+        const { concatClips } = await import("@/lib/video/ffmpeg-service");
+        const assembledVideo = await concatClips(
+          tempVideos.map((video) => video.videoPath),
+        );
+        const { uploadBufferAssetToSupabase } = await import(
+          "@/lib/providers/asset-storage"
+        );
+        const uploadedVideo = await uploadBufferAssetToSupabase({
+          bytes: assembledVideo,
+          workspaceId: ctx.workspaceId,
+          keyPrefix: `workspaces/${ctx.workspaceId}/flow-runs/${ctx.flowRunId}/${ctx.nodeId}`,
+          contentType: "video/mp4",
+          fileName: "montagem.mp4",
+        });
+        const sourceGenerationIds = resolvedClips
+          .map((clip) => clip.generationId)
+          .filter((generationId): generationId is string => Boolean(generationId));
+        const asset = await prisma.asset.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            generationId: null,
+            type: "VIDEO",
+            origin: "GENERATED",
+            url: uploadedVideo.url,
+            storageBucket: uploadedVideo.bucket,
+            storagePath: uploadedVideo.path,
+            contentType: uploadedVideo.contentType,
+            sizeBytes: uploadedVideo.sizeBytes,
+            provider: "labia/ffmpeg",
+            model: "concat",
+            metadata: toJson({
+              clipCount: resolvedClips.length,
+              sourceGenerationIds,
+              flowRunId: ctx.flowRunId,
+              nodeId: ctx.nodeId,
+            }),
+          },
+        });
+
+        return {
+          outputs: {
+            output: {
+              assetId: asset.id,
+              url: uploadedVideo.url,
+              type: "video",
+              status: "done",
+              clipCount: resolvedClips.length,
+            },
+            assetId: asset.id,
+            url: uploadedVideo.url,
+          },
+          actualCost: zeroCost,
+        };
+      } finally {
+        await fs.rm(tempDirectory, { recursive: true, force: true });
+      }
+    },
+    ui: {
+      componentKey: "labNode",
+      kind: "video-assembly",
     },
   },
   {

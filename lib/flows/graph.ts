@@ -8,6 +8,7 @@ export type LabNodeKind =
   | "image-generation"
   | "video-generation"
   | "video-extend"
+  | "video-assembly"
   | "text2video";
 
 export type LabFlowNodeData = {

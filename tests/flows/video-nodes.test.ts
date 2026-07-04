@@ -7,10 +7,14 @@ const mockPrisma = vi.hoisted(() => ({
   generation: {
     findUnique: vi.fn(),
   },
+  asset: {
+    create: vi.fn(),
+  },
 }));
 
 const mockEnqueueVideoGenerationJob = vi.hoisted(() => vi.fn());
 const mockExtractLastFrame = vi.hoisted(() => vi.fn());
+const mockConcatClips = vi.hoisted(() => vi.fn());
 const mockUploadBufferAssetToSupabase = vi.hoisted(() => vi.fn());
 const mockFetch = vi.hoisted(() => vi.fn());
 
@@ -24,6 +28,7 @@ vi.mock("@/lib/providers/video-generation-job", () => ({
 
 vi.mock("@/lib/video/ffmpeg-service", () => ({
   extractLastFrame: mockExtractLastFrame,
+  concatClips: mockConcatClips,
 }));
 
 vi.mock("@/lib/providers/asset-storage", () => ({
@@ -43,8 +48,16 @@ const text2VideoDefinition = videoNodeDefinitions.find(
 const videoExtendDefinition = videoNodeDefinitions.find(
   (definition) => definition.type === "video-extend",
 );
+const videoAssemblyDefinition = videoNodeDefinitions.find(
+  (definition) => definition.type === "video-assembly",
+);
 
-if (!videoDefinition || !text2VideoDefinition || !videoExtendDefinition) {
+if (
+  !videoDefinition ||
+  !text2VideoDefinition ||
+  !videoExtendDefinition ||
+  !videoAssemblyDefinition
+) {
   throw new Error("video node definitions missing in test setup.");
 }
 
@@ -540,6 +553,204 @@ describe("video-extend node", () => {
 
     expect(mockPrisma.generation.findUnique).not.toHaveBeenCalled();
     expect(mockEnqueueVideoGenerationJob).not.toHaveBeenCalled();
+  });
+});
+
+describe("video-assembly node", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockPrisma.generation.findUnique.mockReset();
+    mockPrisma.asset.create.mockReset();
+    mockEnqueueVideoGenerationJob.mockReset();
+    mockConcatClips.mockReset();
+    mockUploadBufferAssetToSupabase.mockReset();
+    mockFetch.mockReset();
+    mockConcatClips.mockResolvedValue(Buffer.from("assembled-mp4"));
+    mockUploadBufferAssetToSupabase.mockResolvedValue({
+      bucket: "assets",
+      path: "workspaces/workspace/flow-runs/flow-run/assembly-node/video.mp4",
+      url: "https://assets.example.com/assembled.mp4",
+      contentType: "video/mp4",
+      sizeBytes: 13,
+    });
+    mockPrisma.asset.create.mockResolvedValue({
+      id: "assembled-asset-id",
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === "content-type" ? "video/mp4" : null),
+      },
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    });
+  });
+
+  it("has a zero estimate because concat is local", () => {
+    expect(
+      videoAssemblyDefinition.estimateCost({
+        nodeId: "assembly-node",
+        params: {},
+        inputs: {},
+      }),
+    ).toMatchObject({
+      usd: 0,
+      brl: 0,
+    });
+  });
+
+  it("waits for all clips, concatenates in input order and creates a deliverable Asset", async () => {
+    const videosByGenerationId = new Map([
+      ["gen-left", "https://assets.example.com/left.mp4"],
+      ["gen-middle", "https://assets.example.com/middle.mp4"],
+      ["gen-right", "https://assets.example.com/right.mp4"],
+    ]);
+    mockPrisma.generation.findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) => ({
+        id: where.id,
+        status: "DONE",
+        errorMessage: null,
+        assets: [
+          {
+            url: videosByGenerationId.get(where.id),
+          },
+        ],
+      }),
+    );
+
+    const result = await videoAssemblyDefinition.execute(
+      makeContext({
+        nodeId: "assembly-node",
+        params: {},
+        inputs: {
+          input: [
+            { generationId: "gen-left" },
+            { generationId: "gen-middle" },
+            { generationId: "gen-right" },
+          ],
+        },
+      }),
+    );
+
+    expect(mockEnqueueVideoGenerationJob).not.toHaveBeenCalled();
+    expect(mockPrisma.generation.findUnique).toHaveBeenCalledTimes(3);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      "https://assets.example.com/left.mp4",
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      "https://assets.example.com/middle.mp4",
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      3,
+      "https://assets.example.com/right.mp4",
+    );
+    expect(mockConcatClips).toHaveBeenCalledWith([
+      expect.stringMatching(/clip-001\.mp4$/),
+      expect.stringMatching(/clip-002\.mp4$/),
+      expect.stringMatching(/clip-003\.mp4$/),
+    ]);
+    expect(mockUploadBufferAssetToSupabase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bytes: Buffer.from("assembled-mp4"),
+        workspaceId: "workspace",
+        keyPrefix: "workspaces/workspace/flow-runs/flow-run/assembly-node",
+        contentType: "video/mp4",
+        fileName: "montagem.mp4",
+      }),
+    );
+    expect(mockPrisma.asset.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        workspaceId: "workspace",
+        generationId: null,
+        type: "VIDEO",
+        origin: "GENERATED",
+        url: "https://assets.example.com/assembled.mp4",
+        storageBucket: "assets",
+        storagePath: "workspaces/workspace/flow-runs/flow-run/assembly-node/video.mp4",
+        contentType: "video/mp4",
+        sizeBytes: 13,
+        provider: "labia/ffmpeg",
+        model: "concat",
+        metadata: {
+          clipCount: 3,
+          sourceGenerationIds: ["gen-left", "gen-middle", "gen-right"],
+          flowRunId: "flow-run",
+          nodeId: "assembly-node",
+        },
+      }),
+    });
+    expect(result).toMatchObject({
+      outputs: {
+        output: {
+          assetId: "assembled-asset-id",
+          url: "https://assets.example.com/assembled.mp4",
+          type: "video",
+          status: "done",
+          clipCount: 3,
+        },
+        assetId: "assembled-asset-id",
+        url: "https://assets.example.com/assembled.mp4",
+      },
+      actualCost: {
+        usd: 0,
+        brl: 0,
+      },
+    });
+  });
+
+  it("fails readably and creates no Asset when fewer than two clips are connected", async () => {
+    await expect(
+      videoAssemblyDefinition.execute(
+        makeContext({
+          nodeId: "assembly-node",
+          params: {},
+          inputs: {
+            input: [{ generationId: "only-one" }],
+          },
+        }),
+      ),
+    ).rejects.toThrow(/Conecte ao menos dois clipes para montar/);
+
+    expect(mockPrisma.generation.findUnique).not.toHaveBeenCalled();
+    expect(mockConcatClips).not.toHaveBeenCalled();
+    expect(mockUploadBufferAssetToSupabase).not.toHaveBeenCalled();
+    expect(mockPrisma.asset.create).not.toHaveBeenCalled();
+  });
+
+  it("fails readably and creates no Asset when any source Generation failed", async () => {
+    mockPrisma.generation.findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) => ({
+        id: where.id,
+        status: where.id === "failed-gen" ? "FAILED" : "DONE",
+        errorMessage: where.id === "failed-gen" ? "erro do provedor" : null,
+        assets:
+          where.id === "failed-gen"
+            ? []
+            : [
+                {
+                  url: `https://assets.example.com/${where.id}.mp4`,
+                },
+              ],
+      }),
+    );
+
+    await expect(
+      videoAssemblyDefinition.execute(
+        makeContext({
+          nodeId: "assembly-node",
+          params: {},
+          inputs: {
+            input: [{ generationId: "done-gen" }, { generationId: "failed-gen" }],
+          },
+        }),
+      ),
+    ).rejects.toThrow(/falhou: erro do provedor.*Montagem não criada/);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockConcatClips).not.toHaveBeenCalled();
+    expect(mockUploadBufferAssetToSupabase).not.toHaveBeenCalled();
+    expect(mockPrisma.asset.create).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,6 @@
 # 02-Vídeos — Construção
 
-**Status:** tarefa 5 implementada e validada por testes unitários + preview dos controles no canvas sem worker (2026-07-04); nenhuma geração real executada · **Etapa:** E2 · **Depende de:** E1 fechada (canvas, worker unificado, Generation/Asset/CreditLedger, ModelProvider fal.ai).
+**Status:** tarefa 6 implementada e validada por testes unitários + preview do canvas sem worker (2026-07-04); nenhuma geração real executada · **Etapa:** E2 · **Depende de:** E1 fechada (canvas, worker unificado, Generation/Asset/CreditLedger, ModelProvider fal.ai).
 
 ## Ordem de tarefas
 
@@ -10,7 +10,7 @@
 3. [x] Nó Text2Video (reuso do 2 sem entrada de imagem). Concluído com `NodeDefinition` `text2video`, prompt por input text ou campo do nó, custo via `FalProvider`, enqueue em `video.generate` sem `image_url`, e UI compartilhada com `Gerar Vídeo`.
 4. [x] Serviço interno de ffmpeg (binário via `ffmpeg-static`): extração de último frame + concat + mix de trilha. Concluído com `spawn` sem shell string, timeout, erro resumido e testes Vitest com `testsrc`/`sine`.
 5. [x] Nó Estender Vídeo: last-frame + contexto de cena propagado pela aresta + aviso de degradação no 6º encadeamento. Concluído com `NodeDefinition` `video-extend`, polling de `Generation` de vídeo, frame intermediário sem `Asset`, `sceneContext`/`chainDepth` no output e UI com aviso visual no 6º encadeamento.
-6. Nó Montagem (concat): reúne os clipes na ordem da posição X dos nós de origem no canvas, concatena (áudio nativo dos clipes passa quando existir) e exporta MP4 único como Asset. Requer suporte a **entrada múltipla ordenada** no runner (`collectInputs` hoje sobrescreve edges no mesmo handle).
+6. [x] Nó Montagem (concat): reúne os clipes na ordem da posição X dos nós de origem no canvas, concatena (áudio nativo dos clipes passa quando existir) e exporta MP4 único como Asset. Concluído com suporte a **entrada múltipla ordenada** no runner, `NodeDefinition` `video-assembly`, upload em prefixo de `flow-runs`, Asset direto sem `Generation`, UI com dica de ordem e custo R$0.
 6b. Trilha/voz por upload: subsistema mínimo de upload (Asset `AUDIO`, `UPLOADED`) + mix na Montagem cobrindo o vídeo inteiro, tratando vídeo SEM faixa de áudio própria em `mixAudioTrack` (clipes Wan/Kling nascem mudos). Separada da 6 porque o upload não existe no projeto ainda e é reutilizável.
 7. Modal de confirmação de custo total (R$) antes de enfileirar fluxo com nó de vídeo.
 8. Retry por nó de vídeo sem re-executar anteriores (clipes anteriores lidos como Asset).

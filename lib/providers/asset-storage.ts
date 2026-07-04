@@ -15,7 +15,8 @@ export type UploadRemoteAssetInput = {
 export type UploadBufferAssetInput = {
   bytes: Buffer;
   workspaceId: string;
-  generationId: string;
+  generationId?: string;
+  keyPrefix?: string;
   contentType: string;
   fileName?: string;
   sourceUrl?: string;
@@ -120,6 +121,7 @@ export async function uploadBufferAssetToSupabase({
   bytes,
   workspaceId,
   generationId,
+  keyPrefix,
   contentType,
   fileName,
   sourceUrl,
@@ -130,7 +132,15 @@ export async function uploadBufferAssetToSupabase({
     sourceUrl,
   });
   const bucket = process.env.SUPABASE_ASSETS_BUCKET ?? DEFAULT_ASSETS_BUCKET;
-  const path = `workspaces/${workspaceId}/generations/${generationId}/${randomUUID()}.${extension}`;
+  const prefix =
+    keyPrefix?.replace(/^\/+|\/+$/g, "") ??
+    (generationId ? `workspaces/${workspaceId}/generations/${generationId}` : undefined);
+
+  if (!prefix) {
+    throw new Error("Upload de asset exige generationId ou keyPrefix.");
+  }
+
+  const path = `${prefix}/${randomUUID()}.${extension}`;
   const supabase = createSupabaseServiceClient();
   const { error } = await supabase.storage.from(bucket).upload(path, bytes, {
     contentType,

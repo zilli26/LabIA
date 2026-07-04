@@ -91,6 +91,7 @@ describe("default nodeDefinitionRegistry singleton (populated with utility nodes
     expect(getNodeDefinition("image-generation")).toBeDefined();
     expect(getNodeDefinition("video-generation")).toBeDefined();
     expect(getNodeDefinition("video-extend")).toBeDefined();
+    expect(getNodeDefinition("video-assembly")).toBeDefined();
   });
 
   it("returns undefined for an unregistered type via getNodeDefinition", () => {
@@ -111,6 +112,7 @@ describe("default nodeDefinitionRegistry singleton (populated with utility nodes
         "image-generation",
         "video-generation",
         "video-extend",
+        "video-assembly",
         "text2video",
       ].sort(),
     );

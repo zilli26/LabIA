@@ -17,7 +17,7 @@ import {
   type FlowExecutionPlan,
   type PlannedFlowNode,
 } from "@/lib/flows/topology";
-import type { NodeExecutionResult } from "@/lib/flows/types";
+import type { NodeExecutionResult, PortSpec } from "@/lib/flows/types";
 
 export async function createFlowRun({
   flowId,
@@ -256,6 +256,7 @@ async function enqueueReadyNodes(flowRunId: string, nodeIds: string[]) {
 async function executeDefinition({
   flowRunId,
   workspaceId,
+  graph,
   plannedNode,
   runNodes,
 }: {
@@ -280,34 +281,100 @@ async function executeDefinition({
     workspaceId,
     nodeId: plannedNode.nodeId,
     params: plannedNode.node.data.params ?? {},
-    inputs: collectInputs(plannedNode, runNodes),
+    inputs: collectInputs(plannedNode, runNodes, graph, definition.inputs),
   });
 }
 
-function collectInputs(
+export function collectInputs(
   plannedNode: PlannedFlowNode,
   runNodes: Array<{
     nodeId: string;
     outputs: Prisma.JsonValue | null;
   }>,
+  graph: FlowGraph,
+  inputSpecs?: PortSpec[],
 ) {
   const inputs: Record<string, unknown> = {};
+  const multipleInputs: Record<
+    string,
+    Array<{
+      sourceNodeId: string;
+      value: unknown;
+      position: { x: number; y: number };
+    }>
+  > = {};
   const nodesById = new Map(runNodes.map((node) => [node.nodeId, node]));
+  const graphNodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 
   for (const edge of plannedNode.incomingEdges) {
     const sourceOutputs = nodesById.get(edge.source)?.outputs;
-    const targetInputId = edge.targetHandle ?? "input";
-    const sourceOutputId = edge.sourceHandle ?? "output";
+    const inputSpec = getInputSpec(inputSpecs, edge.targetHandle);
+    const targetInputId = inputSpec?.id ?? edge.targetHandle ?? "input";
+    const value = getEdgeOutputValue(sourceOutputs, edge.sourceHandle);
 
-    if (isRecord(sourceOutputs) && sourceOutputId in sourceOutputs) {
-      inputs[targetInputId] = sourceOutputs[sourceOutputId];
+    if (inputSpec?.multiple) {
+      const sourceNode = graphNodesById.get(edge.source);
+      multipleInputs[targetInputId] = multipleInputs[targetInputId] ?? [];
+      multipleInputs[targetInputId].push({
+        sourceNodeId: edge.source,
+        value,
+        position: sourceNode?.position ?? { x: Number.POSITIVE_INFINITY, y: 0 },
+      });
       continue;
     }
 
-    inputs[targetInputId] = sourceOutputs;
+    inputs[targetInputId] = value;
+  }
+
+  for (const [inputId, values] of Object.entries(multipleInputs)) {
+    inputs[inputId] = values
+      .sort(compareMultipleInputEntries)
+      .map((entry) => entry.value);
   }
 
   return inputs;
+}
+
+function getInputSpec(inputSpecs: PortSpec[] | undefined, handleId?: string | null) {
+  if (!inputSpecs) {
+    return undefined;
+  }
+
+  if (handleId) {
+    return inputSpecs.find((input) => input.id === handleId);
+  }
+
+  return inputSpecs.find((input) => input.id === "input") ?? inputSpecs[0];
+}
+
+function getEdgeOutputValue(
+  sourceOutputs: Prisma.JsonValue | null | undefined,
+  sourceHandle?: string | null,
+) {
+  const sourceOutputId = sourceHandle ?? "output";
+
+  if (isRecord(sourceOutputs) && sourceOutputId in sourceOutputs) {
+    return sourceOutputs[sourceOutputId];
+  }
+
+  return sourceOutputs;
+}
+
+function compareMultipleInputEntries(
+  left: {
+    sourceNodeId: string;
+    position: { x: number; y: number };
+  },
+  right: {
+    sourceNodeId: string;
+    position: { x: number; y: number };
+  },
+) {
+  return (
+    left.position.x - right.position.x ||
+    left.position.y - right.position.y ||
+    left.sourceNodeId.localeCompare(right.sourceNodeId)
+  );
 }
 
 function getDependencyState(

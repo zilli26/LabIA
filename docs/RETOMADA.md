@@ -1,11 +1,36 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04, Codex** — E2 tarefa 5 (`Estender Vídeo`) implementada sem geração real; lint/typecheck/94 testes verdes; preview sem worker conferiu API/paleta/controles e banco terminou com 0 Generations de vídeo e 0 jobs pendentes.
+> Última atualização: **2026-07-04, Codex** — E2 tarefa 6 (`Montagem`) implementada sem geração real; lint/typecheck/101 testes verdes; preview sem worker conferiu API/paleta/nó com custo R$0 e banco terminou com 0 Generations de vídeo, 0 Assets de montagem e 0 jobs pendentes.
+
+## E2 tarefa 6 concluída — nó `Montagem` / concat local (2026-07-04, Codex)
+
+Implementação concluída sem chamar fal.ai, sem worker, sem smoke test e sem executar fluxo de vídeo. Saídas:
+
+- `lib/flows/runner.ts`: `collectInputs` agora respeita `PortSpec.multiple`; portas múltiplas recebem array ordenado pela posição X do nó de origem no canvas, com desempate por Y e id. Portas normais mantêm valor único.
+- `lib/flows/video-nodes.ts`: criado `NodeDefinition` `video-assembly`/`Montagem`, com input `Clipes` múltiplo, custo `zeroCost`, polling de cada Generation de vídeo até `DONE`, download temporário compartilhado, `concatClips`, upload do MP4 e criação direta de `Asset` `VIDEO`/`GENERATED` sem `Generation` (`provider: labia/ffmpeg`, `model: concat`).
+- `lib/providers/asset-storage.ts`: `uploadBufferAssetToSupabase` aceita `keyPrefix` opcional; chamadas antigas com `generationId` continuam no path anterior.
+- `components/nodes/lab-flow-node.tsx`, `app/(studio)/fluxos/flow-canvas.tsx`, `lib/flows/graph.ts`: kind `video-assembly` registrado no canvas, com ícone próprio, sem select de modelo, dica de ordenação esquerda→direita e chip `custo R$0 (montagem local)`. O canvas trata output por `assetId`/`url`, sem forçar `generationStatus` quando não há `generationId`.
+- Decisões registradas em `modulos/02-videos/decisoes.md`: Asset de Montagem sem `Generation` e `keyPrefix` no upload de buffer.
+
+Validação desta sessão:
+
+- `npx vitest run tests/flows/runner-inputs.test.ts tests/flows/video-nodes.test.ts tests/flows/registry.test.ts` -> 36 testes verdes.
+- `npm run typecheck` -> limpo.
+- `npm run lint` -> limpo.
+- `npx vitest run` -> 101 testes verdes.
+- `npm run dev` sem worker: `/api/flows/node-definitions` serviu `video-assembly`/`Montagem` com `multiple: true`; no canvas, a paleta mostrou o nó, e o nó exibiu dica de ordem e chip `custo R$0 (montagem local)`. A automação do browser não conseguiu criar arestas por drag, mas o handle renderizou como `connectable` e a ausência de limite no código foi coberta pelo teste puro de múltiplas entradas no runner.
+- Banco verificado via Prisma: **0 Generations de vídeo, 0 Assets de montagem (`labia/ffmpeg`/`concat`) e 0 jobs pendentes** em `pgboss.job`.
+
+Próxima ação: tarefa 6b da E2 (`Trilha/voz por upload`), sem mexer no concat já validado e tratando vídeo sem faixa de áudio própria em `mixAudioTrack`.
+
+### Revisão Claude da tarefa 6 (2026-07-04) — APROVADA e commitada
+
+Validação externa independente: lint, typecheck e **101 testes** re-executados pelo revisor (verdes). API viva conferida: `/api/flows/node-definitions` serve `video-assembly -> Montagem` com `multiple: true`. **Ponto de risco (mudança de engine em `collectInputs`) inspecionado a fundo**: portas `multiple` coletam array ordenado por X (desempate Y, id); portas normais mantêm valor único via `getEdgeOutputValue` (comportamento idêntico ao anterior) — coberto por 3 testes em `tests/flows/runner-inputs.test.ts`, incluindo o caso de duas imagens numa entrada não-múltipla (última vence, sem regressão). **A pendência visual do Codex (drag não criava arestas) foi fechada pelo revisor**: fluxo temporário no banco com 3 nós de vídeo em X fora de ordem + Montagem; abri no browser e as **3 arestas chegaram no handle único** de entrada (prova de que aceita múltiplas conexões), nó com dica de ordem e chip "custo R$0 (montagem local)", soma do fluxo ~R$12,15 (3×R$4,05, Montagem R$0 — exata), zero erros de console; fluxo apagado depois. Banco re-verificado: **0 Generations de vídeo, 0 Assets `labia/ffmpeg`/`concat`, 0 jobs pendentes**. Código: Asset de montagem criado direto (origin GENERATED, `generationId` null), download temp compartilhado com cleanup único no `finally`, `keyPrefix` no upload sem quebrar chamadores antigos, `getRecord` do canvas retorna `{}` (sem crash ao ler `output.assetId`). Acentos PT-BR corretos. Nenhuma correção necessária.
 
 ## FIM DE SESSÃO (2026-07-04) — por onde retomar
 
-1. **Próxima tarefa: tarefa 6 da E2 — Montagem.** ATENÇÃO ao caso-limite registrado abaixo: `mixAudioTrack` hoje assume que o vídeo tem faixa de áudio; clipes Wan/Kling podem ser mudos. A tarefa 6 precisa tratar vídeo sem áudio próprio antes de mixar trilha/voz.
+1. **Próxima tarefa: tarefa 6b da E2 — Trilha/voz por upload.** ATENÇÃO ao caso-limite registrado abaixo: `mixAudioTrack` hoje assume que o vídeo tem faixa de áudio; clipes Wan/Kling podem ser mudos. A 6b precisa tratar vídeo sem áudio próprio antes de mixar trilha/voz.
 2. Depois: tarefa 7 (modal de custo total — a trava de gasto do produto) e tarefa 8 (retry por nó).
 3. Então: escada de gerações reais (1 clipe Wan ~R$1,35 → emenda em beat → 30s+ ~R$8,24), cada degrau com aprovação do Felipe NA HORA; resultados alimentam o log do `TECNICAS.md`.
 4. Paralelo aprovado: tarefas candidatas T1–T6 de templates/didática no `modulos/03-fluxos/CONSTRUCAO.md` (T1 "Revisar/Escolher" pode adiantar para a E2); Whitepaper v1 no fechamento da E2.
