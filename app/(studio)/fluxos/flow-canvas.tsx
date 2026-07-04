@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addEdge,
   Background,
@@ -32,6 +32,10 @@ import {
   UploadCloud,
 } from "lucide-react";
 
+import {
+  VideoCostConfirmModal,
+  type VideoCostConfirmItem,
+} from "@/components/flows/video-cost-confirm-modal";
 import { LabFlowNodeComponent } from "@/components/nodes/lab-flow-node";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +46,7 @@ import {
   type LabNodeKind,
 } from "@/lib/flows/graph";
 import { countConsecutiveVideoExtends } from "@/lib/flows/video-chain";
+import { hasPaidVideoNode, PAID_VIDEO_KINDS } from "@/lib/flows/video-cost-gate";
 import type { SerializableNodeDefinition } from "@/lib/flows/types";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +68,7 @@ type CostResponse = {
     };
     nodes: Array<{
       nodeId: string;
+      type: string;
       estimatedCost: {
         brl: number;
       };
@@ -105,6 +111,13 @@ type GenerationResponse = {
       height: number | null;
     }>;
   };
+};
+
+type CostConfirmState = {
+  open: boolean;
+  isLoading: boolean;
+  cost: CostResponse["cost"] | null;
+  errorMessage: string | null;
 };
 
 const nodeTypes = {
@@ -173,6 +186,8 @@ const upcomingNodes = [
     icon: PenLine,
   },
 ];
+
+const paidVideoKindSet = new Set<string>(PAID_VIDEO_KINDS);
 
 function formatBrl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -271,6 +286,13 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
   const [costLabel, setCostLabel] = useState("~R$ 0,00");
+  const [costConfirm, setCostConfirm] = useState<CostConfirmState>({
+    open: false,
+    isLoading: false,
+    cost: null,
+    errorMessage: null,
+  });
+  const costConfirmRequestRef = useRef(0);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const { fitView, getViewport, screenToFlowPosition, setViewport } =
     useReactFlow<LabFlowNode, Edge>();
@@ -301,6 +323,26 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       }),
     [edges, nodes],
   );
+  const costConfirmItems = useMemo<VideoCostConfirmItem[]>(() => {
+    if (!costConfirm.cost) {
+      return [];
+    }
+
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+
+    return costConfirm.cost.nodes
+      .filter((nodeCost) => paidVideoKindSet.has(nodeCost.type))
+      .map((nodeCost) => {
+        const node = nodesById.get(nodeCost.nodeId);
+
+        return {
+          nodeId: nodeCost.nodeId,
+          label: node?.data.title ?? nodeCost.nodeId,
+          kind: (node?.data.kind ?? nodeCost.type) as LabNodeKind,
+          brl: nodeCost.estimatedCost.brl,
+        };
+      });
+  }, [costConfirm.cost, nodes]);
 
   useEffect(() => {
     fetch("/api/flows/node-definitions", { cache: "no-store" })
@@ -331,7 +373,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     return () => window.removeEventListener("lab-flow-node-data-change", markDirty);
   }, []);
 
-  const estimateCost = useCallback(
+  const fetchFlowCost = useCallback(
     async (graph: FlowGraph) => {
       const response = await fetch(`/api/flows/${flowId}/cost`, {
         method: "POST",
@@ -344,10 +386,17 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       });
 
       if (!response.ok) {
-        return;
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? "Não foi possível estimar o custo do fluxo.");
       }
 
-      const payload = (await response.json()) as CostResponse;
+      return (await response.json()) as CostResponse;
+    },
+    [flowId],
+  );
+
+  const applyCostEstimate = useCallback(
+    (payload: CostResponse) => {
       setCostLabel(`~${formatBrl(payload.cost.total.brl)}`);
       setNodes((currentNodes) => {
         const costByNodeId = new Map(
@@ -375,7 +424,20 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
         return changed ? nextNodes : currentNodes;
       });
     },
-    [flowId, setNodes],
+    [setNodes],
+  );
+
+  const estimateCost = useCallback(
+    async (graph: FlowGraph) => {
+      try {
+        const payload = await fetchFlowCost(graph);
+        applyCostEstimate(payload);
+        return payload;
+      } catch {
+        return null;
+      }
+    },
+    [applyCostEstimate, fetchFlowCost],
   );
 
   const loadFlow = useCallback(async () => {
@@ -672,12 +734,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     setIsSaving(false);
   }, [edges, estimateCost, flowId, flowName, getViewport, nodes]);
 
-  const handleRun = useCallback(async () => {
-    if (isDirty) {
-      setErrorMessage("Salve o fluxo antes de executar.");
-      return;
-    }
-
+  const enqueueFlowRun = useCallback(async () => {
     setIsRunning(true);
     setErrorMessage(null);
     setRunMessage(null);
@@ -702,7 +759,105 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     void pollRun(payload.flowRun.id);
     setRunMessage("execução enfileirada");
     setIsRunning(false);
-  }, [applyRunState, flowId, isDirty, pollRun]);
+  }, [applyRunState, flowId, pollRun]);
+
+  const handleRun = useCallback(async () => {
+    if (isDirty) {
+      setErrorMessage("Salve o fluxo antes de executar.");
+      return;
+    }
+
+    if (!hasPaidVideoNode(nodes)) {
+      await enqueueFlowRun();
+      return;
+    }
+
+    const graph: FlowGraph = {
+      nodes,
+      edges,
+      viewport: getViewport(),
+    };
+
+    setErrorMessage(null);
+    setRunMessage(null);
+    setCostConfirm({
+      open: true,
+      isLoading: true,
+      cost: null,
+      errorMessage: null,
+    });
+
+    const requestId = costConfirmRequestRef.current + 1;
+    costConfirmRequestRef.current = requestId;
+
+    try {
+      const payload = await fetchFlowCost(graph);
+      if (costConfirmRequestRef.current !== requestId) {
+        return;
+      }
+      applyCostEstimate(payload);
+      setCostConfirm({
+        open: true,
+        isLoading: false,
+        cost: payload.cost,
+        errorMessage: null,
+      });
+    } catch (error) {
+      if (costConfirmRequestRef.current !== requestId) {
+        return;
+      }
+      setCostConfirm({
+        open: true,
+        isLoading: false,
+        cost: null,
+        errorMessage:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível estimar o custo do fluxo.",
+      });
+    }
+  }, [
+    applyCostEstimate,
+    edges,
+    enqueueFlowRun,
+    fetchFlowCost,
+    getViewport,
+    isDirty,
+    nodes,
+  ]);
+
+  const handleCancelCostConfirm = useCallback(() => {
+    if (isRunning) {
+      return;
+    }
+
+    costConfirmRequestRef.current += 1;
+    setCostConfirm({
+      open: false,
+      isLoading: false,
+      cost: null,
+      errorMessage: null,
+    });
+  }, [isRunning]);
+
+  const handleConfirmCost = useCallback(async () => {
+    if (!costConfirm.cost || costConfirm.isLoading || costConfirm.errorMessage) {
+      return;
+    }
+
+    await enqueueFlowRun();
+    setCostConfirm({
+      open: false,
+      isLoading: false,
+      cost: null,
+      errorMessage: null,
+    });
+  }, [
+    costConfirm.cost,
+    costConfirm.errorMessage,
+    costConfirm.isLoading,
+    enqueueFlowRun,
+  ]);
 
   const isEmpty = !isLoading && nodes.length === 0;
   const statusMessage = errorMessage
@@ -912,6 +1067,18 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           </div>
         ) : null}
       </section>
+
+      <VideoCostConfirmModal
+        open={costConfirm.open}
+        totalBrl={costConfirm.cost?.total.brl ?? null}
+        items={costConfirmItems}
+        isLoading={costConfirm.isLoading}
+        isConfirming={isRunning}
+        errorMessage={costConfirm.errorMessage}
+        formatBrl={formatBrl}
+        onCancel={handleCancelCostConfirm}
+        onConfirm={handleConfirmCost}
+      />
     </main>
   );
 }
