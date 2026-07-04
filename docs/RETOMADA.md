@@ -1,7 +1,31 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04** (side quest do Felipe registrada como trilha formal: P8/P9 + Whitepaper; tarefa 2 da E2 revisada e aprovada).
+> Última atualização: **2026-07-04** (P8 executada por Codex; P9 também consta como executada; side quest de fluxos/templates segue aguardando aprovação do Felipe para virar spec construível).
+
+## P8 executada — Anatomia e didática de fluxos de produção (2026-07-04, Codex)
+
+`pesquisas/P8-anatomia-fluxos-producao.md` deixou de ser apenas SPEC e virou relatório executado, com 2 passadas e 18 fontes. Veredito: o canvas do LabIA não deve ensinar o usuário a "pensar em nós"; deve ensinar a pensar em **processo de produção**.
+
+Cadeia canônica recomendada: Briefing de intenção -> Direção criativa -> Roteiro/copy -> Referências e prompts visuais -> Geração de candidatos -> Curadoria humana -> Vídeo/extend/montagem -> Adaptação por rede -> Aprovação/publicação -> Aprendizado.
+
+Achados prioritários para retomar:
+
+1. **Novo fluxo não deve abrir vazio por padrão.** Abrir com chooser de receitas/templates, mantendo "começar do zero" como opção avançada.
+2. **Próximo nó sugerido por porta é prioridade.** Padrão mais forte encontrado: arrastar de uma saída para o vazio abre picker filtrado por nós compatíveis e já conecta.
+3. **Nó `Revisar/Escolher` custo zero virou recomendação forte.** É o gate humano entre geração barata/cara e evita que vídeo herde erro de imagem.
+4. **Tooltips de custo/capacidade por nó** na paleta e nos nós devem explicar modelo, limitações e custo estimado em R$.
+5. **Fases visuais leves no canvas** (Briefing, Direção, Produção, Revisão, Montagem, Publicação, Aprendizado) ajudam didática, mas sem virar BPMN.
+
+Impacto ainda NÃO aplicado em `modulos/03-fluxos/ESPECIFICACAO.md`, `modulos/03-fluxos/COMO-FUNCIONA.md`, `modulos/02-videos/TECNICAS.md`, `docs/DESIGN-SYSTEM.md`, `docs/WHITEPAPER.md` ou `pesquisas/P9-templates-fluxos-prontos.md`, porque muda requisitos e deve passar pelo Felipe antes de virar contrato de construção.
+
+## P9 executada — Templates de fluxo prontos (2026-07-04, Codex)
+
+`pesquisas/P9-templates-fluxos-prontos.md` deixou de ser apenas prompt e agora contém pesquisa executada com 18 fontes, duas passadas e recomendação de produto/técnica. Veredito: Templates devem ser `FlowTemplate` versionado com grafo JSON + manifest de placeholders, instanciado por galeria + wizard antes de abrir o canvas, sempre com custo estimado em R$ antes de rodar.
+
+Primeira leva recomendada, usando apenas nós existentes/E2: `Post visual simples`, `Carrossel de variações visuais`, `Reel produto 6s barato`, `Trend visual a partir de foto`, `Text2Video rápido 10s`, `Campanha produto mini`, `Vídeo contínuo 30s+` e `Premium com áudio nativo`. Recomendação prática: lançar 5 como default visível e manter templates caros/premium como avançados.
+
+Impacto ainda NÃO aplicado em `modulos/03-fluxos/ESPECIFICACAO.md`, `CONSTRUCAO.md` ou `prisma/schema.prisma`, porque SDD exige aprovação do Felipe antes de transformar pesquisa em contrato de construção. Próxima decisão: Felipe aprova/ajusta a P9; depois registrar decisão local em `modulos/03-fluxos/decisoes.md` e detalhar tarefas de Templates.
 
 ## Side quest registrada — fluxos didáticos, templates e whitepaper (2026-07-04)
 
@@ -14,6 +38,15 @@ Pedido do Felipe, com a preocupação explícita de que side quests não se perc
 Resposta à dúvida do Felipe sobre "começa pelo briefing → notas de direção?": hoje o canvas é livre (não impõe ordem); a cadeia briefing → direção → execução é exatamente o AI Video Director da E3, e a P8 vai validar/nomear essa ordem canônica antes — inclusive para a UX didática do canvas.
 
 **Sequência combinada:** executar P8 e P9 (pesquisa profunda, custo R$0) → seguir tarefas 3–8 da E2 → escada de gerações reais → fechamento E2 dispara Whitepaper v1. As pesquisas NÃO bloqueiam as tarefas 3–8 (são frentes paralelas); bloqueiam apenas a construção de Templates.
+
+### P8 e P9 executadas pelo Codex e revisadas pelo Claude (2026-07-04) — APROVADAS como pesquisa
+
+Revisão independente: 18 fontes em cada, com URL+data; amostragem verificada de fora (doc do Magnific Spaces bate palavra por palavra com as alegações de UX; template n8n de social media existe e faz o descrito; `Flow.isTemplate` existe no schema como a P9 afirma); **as 8 contas de custo da tabela de templates refeitas pelo revisor — todas exatas** contra `docs/06-PROVEDORES.md`. Entregas-chave:
+
+- **P8:** ordem canônica em 10 etapas (briefing → direção → copy → refs/prompts → geração → curadoria → montagem → adaptação por rede → publicação → aprendizado); 10 recomendações de UX didático priorizadas (top 5: chooser no lugar de canvas vazio, próximo nó sugerido por porta, nó "Revisar/Escolher" custo zero, tooltips de custo, conexão inválida explicada); manual do fluxo manual bem-feito hoje (candidato a 1ª receita do TECNICAS.md).
+- **P9:** primeira leva de 8 templates com custo típico (5 visíveis + 2 avançados recomendados); desenho `FlowTemplate` versionado com manifest de placeholders; UX galeria → wizard → canvas montado com custo antes.
+
+**PENDENTE DECISÃO DO FELIPE (SDD):** as pesquisas recomendam mudanças de spec (`modulos/03-fluxos/ESPECIFICACAO.md`, TECNICAS.md, DESIGN-SYSTEM.md, schema `FlowTemplate`) que só entram nos docs após aprovação dele. Os arquivos das pesquisas listam exatamente o que mudaria em cada doc ("Impacto nos docs").
 
 ## E2 tarefa 2 concluída — nó `Gerar Vídeo` img2video no canvas (2026-07-04, Codex)
 
