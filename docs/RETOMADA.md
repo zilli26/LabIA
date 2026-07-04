@@ -27,6 +27,17 @@ Validação desta sessão:
 
 Próxima ação: tarefa 7 da E2 (`Modal de confirmação de custo total`), mantendo a regra de nenhuma geração real sem aprovação explícita do Felipe com custo em R$ declarado antes.
 
+### Revisão Claude da tarefa 6b (2026-07-04) — APROVADA e commitada
+
+Validação externa **por dados, sem screenshot** (regra nova do Felipe nesta sessão: validar por DOM/Prisma, nunca por imagem). Reproduzido de forma independente: lint, typecheck e **107 testes** verdes. Pontos de risco inspecionados:
+
+- **Fix do mix sobre vídeo mudo:** `hasAudioStream` roda `ffmpeg -i` e casa `/^\s*Stream #.+: Audio:/im` no stderr; `mixAudioTrack` ramifica para `[1:a]volume[aout]` (só trilha, com `-stream_loop -1`/`-shortest`) quando não há `[0:a]`. Coberto por teste **real de ffmpeg**: clipe `testsrc -an` (mudo) + faixa `sine` → o revisor conferiu que o teste afirma `source.hasAudio=false`, `mixed.hasAudio=true` e duração ±0,25s. Validação de vídeo de verdade, custo R$0.
+- **Rota de upload exercitada ao vivo:** `POST /api/assets/upload` com WAV mínimo real (44B header + 16B data) via fetch no browser → **200** com `assetId`/URL do Supabase; Prisma confirmou `Asset` `AUDIO`/`UPLOADED` com `metadata.originalFileName`. Objeto do Storage removido (service client) + linha apagada pelo revisor.
+- **Integração no nó por DOM:** fluxo temporário com um nó Montagem → DOM confirmou `input[data-id="assembly-audio-upload"][accept="audio/*"]`, label "Trilha/voz (opcional)" e estado "Nenhuma trilha carregada."; fluxo apagado.
+- **Código:** `downloadRemoteAssetToTemp` generalizado (vídeo/áudio sem duplicar), concat→arquivo→mix condicional, `mixAudioTrack` NÃO chamado sem trilha (regressão da tarefa 6 coberta por teste). Acentos PT-BR corretos.
+
+Banco reverificado ao final: **0 Generations de vídeo, 0 Assets de concat, 0 Assets de áudio, 0 jobs pendentes**. Nota honesta: uma tentativa de `preview_eval` minha retornou erro de navegação mas o POST completou no servidor e deixou um Asset de áudio órfão (`review-test.wav`, 60B) — identificado como resíduo MEU (não do Codex) e removido (Storage + linha). Nenhuma correção necessária na entrega do Codex.
+
 ## E2 tarefa 6 concluída — nó `Montagem` / concat local (2026-07-04, Codex)
 
 Implementação concluída sem chamar fal.ai, sem worker, sem smoke test e sem executar fluxo de vídeo. Saídas:
