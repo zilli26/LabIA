@@ -26,13 +26,19 @@ export async function getPgBoss() {
       throw new Error("DATABASE_URL ou DIRECT_URL é obrigatória para pg-boss.");
     }
 
-    bossPromise = new PgBoss({
+    const boss = new PgBoss({
       connectionString,
       schema: "pgboss",
       migrate: true,
       supervise: true,
       schedule: false,
-    }).start();
+    });
+    // Sem handler, um ECONNRESET do pooler derruba o worker inteiro
+    // (crash observado em 2026-07-04 após ~6h de processo vivo).
+    boss.on("error", (error) => {
+      console.error("[pg-boss flow queue]", error);
+    });
+    bossPromise = boss.start();
   }
 
   return bossPromise;
