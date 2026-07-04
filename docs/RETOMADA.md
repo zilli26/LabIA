@@ -5,7 +5,7 @@
 
 ## FIM DE SESSÃO (2026-07-04) — por onde retomar
 
-1. **Tarefa 5 da E2 — Nó Estender Vídeo** (frame-chaining com `extractLastFrame` + contexto de cena pela aresta + aviso no 6º encadeamento). Claude gera o prompt do Codex na próxima sessão. ATENÇÃO ao caso-limite registrado abaixo (mix em vídeo sem áudio) ao especificar a tarefa 6.
+1. **Tarefa 5 da E2 — Nó Estender Vídeo**: prompt do Codex GERADO e entregue ao Felipe no chat da sessão de 2026-07-04 (tarde). Se perdido, regenerar a partir do CONSTRUCAO.md tarefa 5 + spec do nó em ESPECIFICACAO.md + pontos de design registrados no prompt (poll de Generation de vídeo DONE, frame via `extractLastFrame`, upload do frame como artefato intermediário, `sceneContext` propagado pela aresta, `chainDepth` com aviso no 6º encadeamento). Próximo passo: Felipe cola no Codex; depois revisão Claude com validação externa. ATENÇÃO ao caso-limite registrado abaixo (mix em vídeo sem áudio) ao especificar a tarefa 6.
 2. Depois: tarefa 6 (Montagem), 7 (modal de custo total — a trava de gasto do produto), 8 (retry por nó).
 3. Então: escada de gerações reais (1 clipe Wan ~R$1,35 → emenda em beat → 30s+ ~R$8,24), cada degrau com aprovação do Felipe NA HORA; resultados alimentam o log do `TECNICAS.md`.
 4. Paralelo aprovado: tarefas candidatas T1–T6 de templates/didática no `modulos/03-fluxos/CONSTRUCAO.md` (T1 "Revisar/Escolher" pode adiantar para a E2); Whitepaper v1 no fechamento da E2.
