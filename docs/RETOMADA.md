@@ -1,7 +1,27 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04, fim de sessão de orquestração Claude** — E2 tarefas 5, 6, 6b revisadas e APROVADAS com validação externa por dados (sem screenshot — regra nova do Felipe); prompt da tarefa 7 (modal de custo total) gerado e entregue ao Felipe no chat. Felipe encerrou esta sessão para planejar o DESIGN em outra.
+> Última atualização: **2026-07-04, Codex tarefa 7** — modal de confirmação de custo total implementado e validado por DOM/Prisma; banco final com 0 Generations de vídeo e 0 jobs pendentes. Observação honesta: a validação do fluxo só de imagem preservou execução direta e um worker já ativo no ambiente processou 1 imagem FLUX real (R$0,135); registro/job temporários foram apagados, mas houve gasto de imagem.
+
+## E2 tarefa 7 concluída — modal de confirmação de custo total (2026-07-04, Codex)
+
+Implementação concluída sem confirmar o modal de vídeo e sem rodar `npm run worker`, smoke ou comando de geração. Saídas:
+
+- `lib/flows/video-cost-gate.ts`: criado `PAID_VIDEO_KINDS` + `hasPaidVideoNode`, com gate apenas para `video-generation`, `video-extend` e `text2video`; `video-assembly` segue R$0 e não dispara sozinho.
+- `components/flows/video-cost-confirm-modal.tsx`: modal próprio, sem `Dialog`, com overlay, `role="dialog"`, `aria-modal`, foco inicial em `Cancelar`, Esc/overlay para fechar, scroll de fundo travado e `data-id`s estáveis (`cost-confirm-modal`, `cost-confirm-total`, `cost-confirm-accept`, `cost-confirm-cancel`).
+- `app/(studio)/fluxos/flow-canvas.tsx`: `handleRun` mantém guard de fluxo sujo; fluxos sem vídeo pago seguem no enqueue direto; fluxos com vídeo pago abrem modal, buscam estimativa fresca via `POST /api/flows/{id}/cost` com o grafo atual e só enfileiram ao clicar em `Confirmar e executar`.
+- Docs atualizados em `modulos/02-videos/CONSTRUCAO.md` e `modulos/02-videos/decisoes.md`.
+
+Validação desta sessão:
+
+- `npm run typecheck` -> limpo.
+- `npm run lint` -> limpo.
+- `npx vitest run` -> 112 testes verdes, incluindo `tests/flows/video-cost-gate.test.ts`.
+- `npm run dev` sem worker iniciado por esta sessão: fluxo temporário com `video-generation` salvo pela UI abriu o modal ao clicar `Executar`; DOM confirmou `role="dialog"`, `aria-modal="true"`, foco em `cost-confirm-cancel`, total `R$ 4,05`, breakdown com `video-paid-gate` + `video-generation` e texto de estimativa/gasto real na fal.ai. Clique em `Cancelar` fechou o modal sem mensagem de enqueue.
+- Fluxo temporário só com `image-generation` salvo pela UI não abriu modal e preservou o caminho direto de execução. **Incidente:** havia algum worker/processador já ativo no ambiente; esse fluxo de imagem foi processado e criou `Generation cmr6y05e50000vdzo1krzdn09` (`fal-ai/flux/dev`, `DONE`, providerJobId presente, custo real R$0,135). O registro, assets vinculados e job foram removidos na limpeza. Não houve Generation de vídeo.
+- Auditoria final via Prisma após limpeza: `tempFlowsRemaining: 0`, `videoGenerations: 0`, `pendingJobsCount: 0`.
+
+Próxima ação: tarefa 8 da E2 (`Retry por nó de vídeo sem re-executar anteriores`), mantendo a regra operacional reforçada: antes de validar caminhos que enfileiram qualquer geração, conferir se não há worker/processador externo ativo.
 
 ## FIM DE SESSÃO (2026-07-04, tarde) — por onde retomar
 
