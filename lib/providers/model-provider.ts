@@ -1,6 +1,6 @@
 export type ModelKind = "image" | "video" | "text";
 
-export type PricingUnit = "image" | "megapixel" | "second" | "token";
+export type PricingUnit = "image" | "megapixel" | "second" | "clip" | "token";
 
 export type CostLineItem = {
   label: string;

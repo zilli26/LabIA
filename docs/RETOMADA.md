@@ -1,7 +1,37 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-03** (sessão Claude - E2 aberta: spec do módulo 02 revisada e APROVADA pelo Felipe; prompt da tarefa 0 gerado para o Codex).
+> Última atualização: **2026-07-04** (sessão Codex - tarefa 0 da E2 concluída por pesquisa documental, sem geração).
+
+## E2 tarefa 0 concluída — catálogo fal.ai de vídeo (2026-07-04, Codex)
+
+Mapeamento documental da tarefa 0 do módulo `02-videos` concluído sem chamar API paga, worker, smoke test ou geração real. Saídas:
+
+- `lib/providers/fal-models.ts`: criado `FAL_VIDEO_MODELS` com 5 famílias pedidas: Wan 2.5, Kling 2.5, Hailuo/MiniMax, Seedance 2.0 e Veo 3. Cada item registra endpoint(s), preço, duração, suporte a áudio nativo, suporte a extend nativo e `defaultInput`.
+- `lib/providers/model-provider.ts`: `PricingUnit` passou a aceitar `clip`, necessário para modelos cobrados por geração/clipe.
+- `lib/providers/fal.ts`: `listModels("video")` agora devolve o catálogo de vídeo, sem implementar geração.
+- `docs/06-PROVEDORES.md`: tabela atualizada com os 5 modelos, preço em USD e data/fonte 2026-07-04.
+- `modulos/02-videos/fontes-tarefa-0.md`: URLs exatas consultadas e lacunas registradas.
+- `modulos/02-videos/CONSTRUCAO.md`: status atualizado e tarefa 0 marcada como concluída.
+
+Lacunas/alertas registrados:
+
+1. Wan 2.5: tem `audio_url` de entrada/background music, mas não foi encontrada geração nativa de áudio.
+2. Kling 2.5: sem áudio nativo no endpoint geral da fal.ai; extend nativo não confirmado na fal.ai (P2 citava fora da fal.ai).
+3. Hailuo 2.3: Standard ficou como canônico por ter duração/preço claros; Pro aparece como US$0,49/geração, mas a duração não ficou explícita no schema público; áudio nativo ficou lacuna.
+4. Seedance 2.0: conflito pequeno de preço entre páginas (`US$0,3034/s` vs `US$0,3024/s` no image-to-video); catálogo usa o maior valor e registra o conflito.
+5. Veo 3: conflito de preço na própria doc (`US$0,20/s` sem áudio e `US$0,40/s` com áudio no endpoint; Readme cita Standard `US$0,50/0,75` e Fast `US$0,25/0,40`); catálogo registra o conflito.
+
+Validação desta sessão:
+
+- `npm run lint` limpo.
+- `npm run typecheck` limpo.
+- `git diff --check` sem erros de whitespace; apenas avisos CRLF normais do Windows.
+- Nenhum comando executado nesta sessão chamou `fal.queue`, `worker`, `smoke` ou `npm run dev`.
+
+### Revisão Claude da tarefa 0 (2026-07-04) — APROVADA e commitada
+
+Validação externa independente (não aceitou a auto-declaração): lint, typecheck e 47 testes rodados de novo pelo revisor, tudo verde; **os 5 preços conferidos por segunda leitura das páginas públicas da fal.ai (WebFetch)** — Wan, Kling, Veo 3, Hailuo e Seedance batendo com o catálogo. Diff inspecionado: nenhuma chamada de geração, só dados + `listModels("video")`. Correções de revisão aplicadas direto: acentos PT-BR restaurados em `fontes-tarefa-0.md` (Codex entregou sem acento de novo — padrão recorrente, checar em toda revisão) e registrada incerteza adicional no preço 1080p do Seedance (US$0,682/s não reconfirmado na releitura; reconfirmar na tarefa 1 antes de entrar no `estimateCost`).
 
 ## E2 aberta — spec aprovada (2026-07-03, sessão de orquestração)
 

@@ -3,6 +3,7 @@ import { fal } from "@fal-ai/client";
 import {
   DEFAULT_USD_BRL_RATE,
   FAL_IMAGE_MODELS,
+  FAL_VIDEO_MODELS,
   FAL_PROVIDER_ID,
   findFalImageModel,
   resolveFalImageModelId,
@@ -240,6 +241,14 @@ export class FalProvider implements ModelProvider {
   }
 
   listModels(kind: ModelKind): ModelInfo[] {
+    if (kind === "video") {
+      return FAL_VIDEO_MODELS.map(({ aliases, defaultInput, ...model }) => {
+        void aliases;
+        void defaultInput;
+        return model;
+      });
+    }
+
     if (kind !== "image") {
       return [];
     }
