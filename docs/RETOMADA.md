@@ -1,7 +1,15 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04, Codex** — E2 tarefa 6b (`Trilha/voz por upload`) implementada sem geração real; lint/typecheck/107 testes verdes; preview sem worker conferiu API/DOM do controle de trilha, upload real de WAV sintético e banco terminou com 0 Generations de vídeo, 0 Assets de vídeo novos, 0 Assets de áudio de teste e 0 jobs pendentes.
+> Última atualização: **2026-07-04, fim de sessão de orquestração Claude** — E2 tarefas 5, 6, 6b revisadas e APROVADAS com validação externa por dados (sem screenshot — regra nova do Felipe); prompt da tarefa 7 (modal de custo total) gerado e entregue ao Felipe no chat. Felipe encerrou esta sessão para planejar o DESIGN em outra.
+
+## FIM DE SESSÃO (2026-07-04, tarde) — por onde retomar
+
+1. **Próxima tarefa: tarefa 7 da E2 — Modal de confirmação de custo total (R$).** Prompt do Codex GERADO e entregue ao Felipe no chat desta sessão. Se perdido, regenerar de: `CONSTRUCAO.md` tarefa 7 + Regra de produto 1 da `ESPECIFICACAO.md` + pontos de design registrados no prompt (gate puro `hasPaidVideoNode` para `video-generation`/`video-extend`/`text2video`; `video-assembly` R$0 não dispara sozinho; modal próprio porque NÃO há Dialog em `components/ui/`; estimativa FRESCA via `POST /api/flows/{id}/cost` ao abrir; confirmar reusa o enqueue atual de `handleRun`; validação por DOM sem confirmar o modal pra não enfileirar). Fluxos só de imagem mantêm execução direta.
+2. Depois: tarefa 8 (retry por nó de vídeo sem re-executar anteriores — clipes anteriores lidos como Asset). Fecha a E2 no núcleo.
+3. Então: escada de gerações reais (1 clipe Wan ~R$1,35 → emenda em beat → 30s+ ~R$8,24), cada degrau com aprovação do Felipe NA HORA; resultados alimentam o log do `TECNICAS.md`.
+4. Paralelo aprovado: tarefas candidatas T1–T6 de templates/didática (`modulos/03-fluxos/CONSTRUCAO.md`); Whitepaper v1 no fechamento da E2. **Side quest de DESIGN em andamento pelo Felipe em outra sessão (2026-07-04) — quando voltar, cruzar com `docs/DESIGN-SYSTEM.md` e a seção Didática do canvas.**
+5. Regra viva: nenhuma geração paga sem ok explícito do Felipe com custo em R$ declarado antes; Codex nunca roda geração real; revisão sempre com validação externa **por dados/DOM/Prisma, nunca por screenshot** (ver `memory/validacao-sem-screenshot.md`).
 
 ## E2 tarefa 6b concluída — trilha/voz por upload na `Montagem` (2026-07-04, Codex)
 
