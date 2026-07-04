@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addEdge,
   Background,
@@ -40,6 +40,7 @@ import {
   type LabFlowNode,
   type LabNodeKind,
 } from "@/lib/flows/graph";
+import { countConsecutiveVideoExtends } from "@/lib/flows/video-chain";
 import type { SerializableNodeDefinition } from "@/lib/flows/types";
 import { cn } from "@/lib/utils";
 
@@ -114,6 +115,7 @@ const nodeIcons: Record<LabNodeKind, typeof FileText> = {
   prompt: MessageSquareText,
   "image-generation": ImageIcon,
   "video-generation": Clapperboard,
+  "video-extend": Clapperboard,
   text2video: Clapperboard,
   note: StickyNote,
   "asset-output": UploadCloud,
@@ -199,6 +201,16 @@ function getDefaultParams(kind: LabNodeKind) {
     };
   }
 
+  if (kind === "video-extend") {
+    return {
+      model: "fal-ai/wan-25-preview/image-to-video",
+      prompt: "",
+      sceneContext: "",
+      duration: "5",
+      resolution: "1080p",
+    };
+  }
+
   if (kind === "text2video") {
     return {
       model: "fal-ai/wan-25-preview/image-to-video",
@@ -256,6 +268,33 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const { fitView, getViewport, screenToFlowPosition, setViewport } =
     useReactFlow<LabFlowNode, Edge>();
+  const nodesWithExtendDepth = useMemo(
+    () =>
+      nodes.map((node) => {
+        if (node.data.kind !== "video-extend") {
+          return node;
+        }
+
+        const extendChainDepth = countConsecutiveVideoExtends({
+          nodes,
+          edges,
+          nodeId: node.id,
+        });
+
+        if (node.data.extendChainDepth === extendChainDepth) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            extendChainDepth,
+          },
+        };
+      }),
+    [edges, nodes],
+  );
 
   useEffect(() => {
     fetch("/api/flows/node-definitions", { cache: "no-store" })
@@ -467,6 +506,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           if (
             (node.data.kind === "image-generation" ||
               node.data.kind === "video-generation" ||
+              node.data.kind === "video-extend" ||
               node.data.kind === "text2video") &&
             generationId
           ) {
@@ -488,6 +528,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
                 generationStatus:
                   (node.data.kind === "image-generation" ||
                     node.data.kind === "video-generation" ||
+                    node.data.kind === "video-extend" ||
                     node.data.kind === "text2video") &&
                   generationId
                     ? "queued"
@@ -707,7 +748,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
       <section className="relative min-h-0 flex-1">
         <ReactFlow
-          nodes={nodes}
+          nodes={nodesWithExtendDepth}
           edges={edges}
           nodeTypes={nodeTypes}
           colorMode="dark"

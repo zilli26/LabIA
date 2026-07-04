@@ -12,6 +12,15 @@ export type UploadRemoteAssetInput = {
   fileName?: string;
 };
 
+export type UploadBufferAssetInput = {
+  bytes: Buffer;
+  workspaceId: string;
+  generationId: string;
+  contentType: string;
+  fileName?: string;
+  sourceUrl?: string;
+};
+
 export type UploadedAsset = {
   bucket: string;
   path: string;
@@ -26,7 +35,7 @@ function createSupabaseServiceClient() {
 
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error(
-      "Supabase Storage nao configurado. Defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.",
+      "Supabase Storage não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.",
     );
   }
 
@@ -70,7 +79,7 @@ function getAssetExtension({
 }: {
   contentType: string;
   fileName?: string;
-  sourceUrl: string;
+  sourceUrl?: string;
 }) {
   return (
     extensionFromContentType(contentType) ??
@@ -96,8 +105,27 @@ export async function uploadRemoteAssetToSupabase({
   const responseContentType =
     response.headers.get("content-type") ?? contentType ?? "application/octet-stream";
   const bytes = Buffer.from(await response.arrayBuffer());
-  const extension = getAssetExtension({
+
+  return uploadBufferAssetToSupabase({
+    bytes,
+    workspaceId,
+    generationId,
     contentType: responseContentType,
+    fileName,
+    sourceUrl,
+  });
+}
+
+export async function uploadBufferAssetToSupabase({
+  bytes,
+  workspaceId,
+  generationId,
+  contentType,
+  fileName,
+  sourceUrl,
+}: UploadBufferAssetInput): Promise<UploadedAsset> {
+  const extension = getAssetExtension({
+    contentType,
     fileName,
     sourceUrl,
   });
@@ -105,7 +133,7 @@ export async function uploadRemoteAssetToSupabase({
   const path = `workspaces/${workspaceId}/generations/${generationId}/${randomUUID()}.${extension}`;
   const supabase = createSupabaseServiceClient();
   const { error } = await supabase.storage.from(bucket).upload(path, bytes, {
-    contentType: responseContentType,
+    contentType,
     upsert: false,
   });
 
@@ -119,7 +147,7 @@ export async function uploadRemoteAssetToSupabase({
     bucket,
     path,
     url: publicUrl,
-    contentType: responseContentType,
+    contentType,
     sizeBytes: bytes.byteLength,
   };
 }

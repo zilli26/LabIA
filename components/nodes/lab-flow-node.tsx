@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import {
+  AlertTriangle,
   Clapperboard,
   FileText,
   MessageSquareText,
@@ -43,6 +44,11 @@ const nodeMeta: Record<
   },
   "video-generation": {
     label: "vídeo",
+    accent: "var(--lab-node-video)",
+    Icon: Clapperboard,
+  },
+  "video-extend": {
+    label: "extend",
     accent: "var(--lab-node-video)",
     Icon: Clapperboard,
   },
@@ -163,11 +169,11 @@ function getVideoPriceLabel(modelId: string) {
 function VideoControls({
   params,
   updateParams,
-  includeImageInput,
+  mode,
 }: {
   params: Record<string, unknown>;
   updateParams: (nextParams: Record<string, unknown>) => void;
-  includeImageInput: boolean;
+  mode: "image" | "text" | "extend";
 }) {
   const selectedVideoModel =
     getString(params.model) ??
@@ -197,6 +203,7 @@ function VideoControls({
       : false);
   const assetUrl = getString(params.assetUrl);
   const generationStatus = getString(params.generationStatus);
+  const isExtend = mode === "extend";
 
   if (!selectedVideoModelInfo) {
     return null;
@@ -256,16 +263,35 @@ function VideoControls({
 
       <label className="block">
         <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
-          movimento
+          {isExtend ? "continuação" : "movimento"}
         </span>
         <textarea
-          aria-label="Prompt de movimento"
+          aria-label={isExtend ? "Prompt de continuação" : "Prompt de movimento"}
           value={getString(params.prompt) ?? ""}
           onChange={(event) => updateParams({ prompt: event.target.value })}
-          placeholder="Descreva cena, movimento, câmera e ritmo..."
+          placeholder={
+            isExtend
+              ? "Descreva a continuação do clipe..."
+              : "Descreva cena, movimento, câmera e ritmo..."
+          }
           className="nodrag nowheel h-20 w-full resize-none rounded-control border border-lab-border bg-lab-surface-1 px-3 py-2 font-mono text-xs leading-5 text-lab-text outline-none transition-colors placeholder:text-lab-text-muted focus:border-lab-border-strong focus:shadow-lab-focus"
         />
       </label>
+
+      {isExtend ? (
+        <label className="block">
+          <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
+            contexto de cena
+          </span>
+          <textarea
+            aria-label="Contexto de cena"
+            value={getString(params.sceneContext) ?? ""}
+            onChange={(event) => updateParams({ sceneContext: event.target.value })}
+            placeholder="Personagem, luz, câmera e estilo que devem continuar..."
+            className="nodrag nowheel h-20 w-full resize-none rounded-control border border-lab-border bg-lab-surface-1 px-3 py-2 font-mono text-xs leading-5 text-lab-text outline-none transition-colors placeholder:text-lab-text-muted focus:border-lab-border-strong focus:shadow-lab-focus"
+          />
+        </label>
+      ) : null}
 
       <label className="block">
         <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
@@ -320,7 +346,7 @@ function VideoControls({
         </label>
       ) : null}
 
-      {includeImageInput ? (
+      {mode === "image" ? (
         <label className="block">
           <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
             imagem de entrada
@@ -352,9 +378,11 @@ function VideoControls({
         </div>
       ) : (
         <div className="flex h-20 items-center justify-center rounded-control border border-dashed border-lab-border bg-lab-surface-1 px-3 text-center text-xs text-lab-text-muted">
-          {includeImageInput
+          {mode === "image"
             ? "Conecte uma imagem ou informe um asset."
-            : "Conecte um Prompt ou digite o texto."}
+            : isExtend
+              ? "Conecte o vídeo anterior."
+              : "Conecte um Prompt ou digite o texto."}
         </div>
       )}
 
@@ -509,11 +537,29 @@ export function LabFlowNodeComponent({
           </div>
         ) : null}
 
-        {data.kind === "video-generation" || data.kind === "text2video" ? (
+        {data.kind === "video-extend" && (data.extendChainDepth ?? 0) >= 6 ? (
+          <div className="mt-3 flex gap-2 rounded-control border border-lab-warning/50 bg-lab-surface-1 px-2.5 py-2 text-xs leading-5 text-lab-warning">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>
+              {data.extendChainDepth}º encadeamento - qualidade tende a
+              degradar acima de ~60s.
+            </span>
+          </div>
+        ) : null}
+
+        {data.kind === "video-generation" ||
+        data.kind === "text2video" ||
+        data.kind === "video-extend" ? (
           <VideoControls
             params={params}
             updateParams={updateParams}
-            includeImageInput={data.kind === "video-generation"}
+            mode={
+              data.kind === "video-generation"
+                ? "image"
+                : data.kind === "video-extend"
+                  ? "extend"
+                  : "text"
+            }
           />
         ) : null}
       </div>

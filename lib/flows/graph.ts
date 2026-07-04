@@ -7,6 +7,7 @@ export type LabNodeKind =
   | "prompt"
   | "image-generation"
   | "video-generation"
+  | "video-extend"
   | "text2video";
 
 export type LabFlowNodeData = {
@@ -15,6 +16,7 @@ export type LabFlowNodeData = {
   description: string;
   status: "idle" | "ready" | "queued" | "running" | "done" | "failed";
   costLabel?: string;
+  extendChainDepth?: number;
   params?: Record<string, unknown>;
 };
 

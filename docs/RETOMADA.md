@@ -1,12 +1,12 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04, fim de sessão de orquestração Claude** — E2 tarefas 0-4 prontas e revisadas; P8/P9 executadas, APROVADAS pelo Felipe e aplicadas nas specs (nota: a side quest NÃO está mais pendente — a linha anterior deste header, escrita pelo Codex, estava desatualizada).
+> Última atualização: **2026-07-04, Codex** — E2 tarefa 5 (`Estender Vídeo`) implementada sem geração real; lint/typecheck/94 testes verdes; preview sem worker conferiu API/paleta/controles e banco terminou com 0 Generations de vídeo e 0 jobs pendentes.
 
 ## FIM DE SESSÃO (2026-07-04) — por onde retomar
 
-1. **Tarefa 5 da E2 — Nó Estender Vídeo**: prompt do Codex GERADO e entregue ao Felipe no chat da sessão de 2026-07-04 (tarde). Se perdido, regenerar a partir do CONSTRUCAO.md tarefa 5 + spec do nó em ESPECIFICACAO.md + pontos de design registrados no prompt (poll de Generation de vídeo DONE, frame via `extractLastFrame`, upload do frame como artefato intermediário, `sceneContext` propagado pela aresta, `chainDepth` com aviso no 6º encadeamento). Próximo passo: Felipe cola no Codex; depois revisão Claude com validação externa. ATENÇÃO ao caso-limite registrado abaixo (mix em vídeo sem áudio) ao especificar a tarefa 6.
-2. Depois: tarefa 6 (Montagem), 7 (modal de custo total — a trava de gasto do produto), 8 (retry por nó).
+1. **Próxima tarefa: tarefa 6 da E2 — Montagem.** ATENÇÃO ao caso-limite registrado abaixo: `mixAudioTrack` hoje assume que o vídeo tem faixa de áudio; clipes Wan/Kling podem ser mudos. A tarefa 6 precisa tratar vídeo sem áudio próprio antes de mixar trilha/voz.
+2. Depois: tarefa 7 (modal de custo total — a trava de gasto do produto) e tarefa 8 (retry por nó).
 3. Então: escada de gerações reais (1 clipe Wan ~R$1,35 → emenda em beat → 30s+ ~R$8,24), cada degrau com aprovação do Felipe NA HORA; resultados alimentam o log do `TECNICAS.md`.
 4. Paralelo aprovado: tarefas candidatas T1–T6 de templates/didática no `modulos/03-fluxos/CONSTRUCAO.md` (T1 "Revisar/Escolher" pode adiantar para a E2); Whitepaper v1 no fechamento da E2.
 5. Regra viva: nenhuma geração paga sem ok explícito do Felipe com custo em R$ declarado antes; Codex nunca roda geração real; revisão sempre com validação externa (rodar suíte, browser, banco — nunca aceitar auto-declaração).
@@ -16,6 +16,32 @@
 Validação externa independente: lint, typecheck e **84 testes** re-executados pelo revisor (verdes; os 5 de ffmpeg processam clipes sintéticos reais `testsrc`+`sine` — validação de vídeo de verdade, custo R$0). API viva conferida com dev server sem worker: `/api/flows/node-definitions` serve `text2video -> Texto para Vídeo`. Banco re-verificado via Prisma: **0 Generations de vídeo, 0 jobs pendentes**. Código inspecionado: `ffmpeg-service.ts` usa spawn com array (sem injeção de shell), timeout com kill, stderr resumido, concat com re-encode justificado em comentário.
 
 **Caso-limite registrado para a tarefa 6 (Montagem):** `mixAudioTrack` assume que o vídeo TEM faixa de áudio (`[0:a]` no filter_complex) — clipes de Wan/Kling nascem MUDOS e o mix falharia neles. O prompt da tarefa 6 deve exigir tratamento de vídeo sem trilha própria (ex.: `anullsrc` como fallback ou detecção prévia de faixa). Não é bug das tarefas 3-4 (contrato pedia mix sobre áudio existente).
+
+## E2 tarefa 5 concluída — nó `Estender Vídeo` / frame-chaining (2026-07-04, Codex)
+
+Implementação concluída sem chamar fal.ai, sem worker, sem smoke test e sem execução de fluxo de vídeo. Saídas:
+
+- `lib/flows/video-nodes.ts`: criado o `NodeDefinition` `video-extend`/`Estender Vídeo`, com input/output `video`, custo via `FalProvider.estimateCost`, polling genérico de `Generation` até `DONE` com `Asset` tipo `VIDEO`, download temporário do vídeo upstream, `extractLastFrame`, upload do frame PNG e enqueue em `video.generate` com `image_url` do frame.
+- `lib/providers/asset-storage.ts`: extraído `uploadBufferAssetToSupabase`, reutilizado por `uploadRemoteAssetToSupabase`. O frame intermediário sobe no path do `generationId` upstream e não cria linha `Asset`.
+- Prompt de continuação: `sceneContext` pode vir do nó anterior pela aresta ou do campo local; o campo local vence. O prompt enviado anexa o contexto de cena usado. Output propaga `sceneContext` e `chainDepth = (input.chainDepth ?? 0) + 1`.
+- `components/nodes/lab-flow-node.tsx`, `app/(studio)/fluxos/flow-canvas.tsx`, `lib/flows/graph.ts`: kind `video-extend` registrado no canvas, com controles compartilhados de vídeo, label `continuação`, textarea `Contexto de cena`, chip de custo em R$ e aviso visual a partir do 6º encadeamento.
+- `lib/flows/video-chain.ts`: função pura para contar `video-extend` consecutivos upstream caminhando pelas arestas, coberta em teste unitário.
+- Decisões registradas em `modulos/02-videos/decisoes.md`: frame intermediário sem `Asset`, precedência de `sceneContext` local e aviso de degradação calculado em tempo de edição.
+
+Validação desta sessão:
+
+- `npx vitest run tests/flows/video-nodes.test.ts tests/flows/video-chain.test.ts tests/flows/registry.test.ts` -> 31 testes verdes.
+- `npm run typecheck` -> limpo.
+- `npm run lint` -> limpo.
+- `npx vitest run` -> 94 testes verdes.
+- `npm run dev` sem worker: `/api/flows/node-definitions` serviu `video-extend`/`Estender Vídeo`; no canvas, a paleta mostrou o nó, e o nó exibiu select de modelo com preço, chip `~R$ 4,05`, prompt `continuação`, duração/resolução e textarea `Contexto de cena`. Seis nós foram adicionados apenas no estado local da tela, sem salvar e sem executar; a conexão visual por drag no browser não criou a cadeia, então o aviso do 6º encadeamento ficou validado pela função pura/teste unitário, não por inspeção visual completa.
+- Banco verificado via Prisma: **0 Generations de vídeo, 0 jobs pendentes** em `pgboss.job` para `video.generate`.
+
+Próxima ação: tarefa 6 da E2 (`Montagem`), obrigatoriamente tratando vídeo sem faixa de áudio própria.
+
+### Revisão Claude da tarefa 5 (2026-07-04) — APROVADA e commitada
+
+Validação externa independente: lint, typecheck e **94 testes** re-executados pelo revisor (verdes). API viva conferida: `/api/flows/node-definitions` serve `video-extend -> Estender Vídeo`. **A pendência visual do Codex foi fechada pelo revisor**: como o drag não criava arestas na sessão dele, o revisor criou um fluxo temporário direto no banco (Prisma) com Gerar Vídeo + 6 Estender encadeados e abriu no browser — os extends 1–5 renderizaram SEM aviso e o 6º mostrou o badge "6º encadeamento - qualidade tende a degradar acima de ~60s"; 6 arestas renderizadas, campo "contexto de cena" presente, chip ~R$4,05 por nó e soma do fluxo ~R$28,35 (7×R$4,05, exata), zero erros de console; fluxo temporário apagado depois. Banco re-verificado: **0 Generations de vídeo, 0 jobs pendentes**. Código inspecionado: poll generalizado sem duplicação, `uploadBufferAssetToSupabase` extraído e reutilizado (de quebra corrigiu acento preexistente em "não configurado"), precedência params > aresta no `sceneContext`, `chainDepth` propagado, cleanup do temp em `finally`, contagem de cadeia pura com proteção de ciclo. Acentos PT-BR corretos em toda a entrega — primeira vez sem regressão de acento em strings novas. Nenhuma correção necessária.
 
 ## E2 tarefas 3-4 concluídas — `Text2Video` + serviço ffmpeg local (2026-07-04, Codex)
 

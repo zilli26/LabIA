@@ -1,6 +1,6 @@
 # 02-Vídeos — Construção
 
-**Status:** tarefas 3 e 4 implementadas e validadas por testes unitários + suíte ffmpeg local com clipes sintéticos (2026-07-04); nenhuma geração real executada · **Etapa:** E2 · **Depende de:** E1 fechada (canvas, worker unificado, Generation/Asset/CreditLedger, ModelProvider fal.ai).
+**Status:** tarefa 5 implementada e validada por testes unitários + preview dos controles no canvas sem worker (2026-07-04); nenhuma geração real executada · **Etapa:** E2 · **Depende de:** E1 fechada (canvas, worker unificado, Generation/Asset/CreditLedger, ModelProvider fal.ai).
 
 ## Ordem de tarefas
 
@@ -9,7 +9,7 @@
 2. [x] Nó Gerar Vídeo (img2video): imagem de entrada (nó ou asset), prompt de movimento, select de modelo com preço, duração, toggle áudio. Job assíncrono com status por polling (padrão E1). Concluído por testes unitários e preview visual sem executar fluxo de vídeo.
 3. [x] Nó Text2Video (reuso do 2 sem entrada de imagem). Concluído com `NodeDefinition` `text2video`, prompt por input text ou campo do nó, custo via `FalProvider`, enqueue em `video.generate` sem `image_url`, e UI compartilhada com `Gerar Vídeo`.
 4. [x] Serviço interno de ffmpeg (binário via `ffmpeg-static`): extração de último frame + concat + mix de trilha. Concluído com `spawn` sem shell string, timeout, erro resumido e testes Vitest com `testsrc`/`sine`.
-5. Nó Estender Vídeo: last-frame + contexto de cena propagado pela aresta + aviso de degradação no 6º encadeamento.
+5. [x] Nó Estender Vídeo: last-frame + contexto de cena propagado pela aresta + aviso de degradação no 6º encadeamento. Concluído com `NodeDefinition` `video-extend`, polling de `Generation` de vídeo, frame intermediário sem `Asset`, `sceneContext`/`chainDepth` no output e UI com aviso visual no 6º encadeamento.
 6. Nó Montagem: concat + áudio nativo dos clipes + trilha/voz por upload mixada, export MP4 como Asset.
 7. Modal de confirmação de custo total (R$) antes de enfileirar fluxo com nó de vídeo.
 8. Retry por nó de vídeo sem re-executar anteriores (clipes anteriores lidos como Asset).
