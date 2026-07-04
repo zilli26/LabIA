@@ -1,7 +1,19 @@
 # RETOMADA - estado vivo do projeto
 
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
-> Última atualização: **2026-07-04** (sessão Codex - tarefa 2 da E2 implementada por testes unitários + preview visual, sem geração).
+> Última atualização: **2026-07-04** (side quest do Felipe registrada como trilha formal: P8/P9 + Whitepaper; tarefa 2 da E2 revisada e aprovada).
+
+## Side quest registrada — fluxos didáticos, templates e whitepaper (2026-07-04)
+
+Pedido do Felipe, com a preocupação explícita de que side quests não se percam nem saiam do plano. **Encaixe verificado: não é desvio — é o aprofundamento de features que o plano JÁ prevê** ("Templates de fluxo (E2+)" e AI Video Director/E3 em `modulos/03-fluxos/ESPECIFICACAO.md`; "biblioteca de formatos validados" no backlog do ROADMAP). O que foi criado:
+
+1. **`pesquisas/P8-anatomia-fluxos-producao.md`** — spec de pesquisa profunda: como fluxos são bem feitos (ComfyUI/n8n/Higgsfield/Flow), a ordem canônica de trabalho do social media (briefing → direção → geração → montagem → publicação), lente de mapeamento de processos, padrões de canvas didático, e o manual do fluxo manual bem-feito hoje. Duas passadas, 12+ fontes, recomendação obrigatória por seção.
+2. **`pesquisas/P9-templates-fluxos-prontos.md`** — spec de pesquisa: fluxos pré-moldados onde o usuário só troca as informações. Primeira leva de 5–8 templates (só com nós da E2), o que parametrizar, modelo de dados e UX de instanciar. Depende conceitualmente da P8.
+3. **Whitepaper registrado no backlog do ROADMAP** — passo a passo didático da plataforma inteira; 1ª versão no fechamento da E2; esqueleto vem da P8, capítulo de templates da P9, receitas do TECNICAS.md.
+
+Resposta à dúvida do Felipe sobre "começa pelo briefing → notas de direção?": hoje o canvas é livre (não impõe ordem); a cadeia briefing → direção → execução é exatamente o AI Video Director da E3, e a P8 vai validar/nomear essa ordem canônica antes — inclusive para a UX didática do canvas.
+
+**Sequência combinada:** executar P8 e P9 (pesquisa profunda, custo R$0) → seguir tarefas 3–8 da E2 → escada de gerações reais → fechamento E2 dispara Whitepaper v1. As pesquisas NÃO bloqueiam as tarefas 3–8 (são frentes paralelas); bloqueiam apenas a construção de Templates.
 
 ## E2 tarefa 2 concluída — nó `Gerar Vídeo` img2video no canvas (2026-07-04, Codex)
 

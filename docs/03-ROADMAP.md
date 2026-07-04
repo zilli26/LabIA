@@ -42,3 +42,5 @@ Pesquisas agendadas e profundas; onboarding de cliente que cria Brand/DNA guiado
 ## Backlog além das etapas (documentado, sem data)
 
 Community manager (responder comentários em voz de marca), social listening, "Jornada vira Conteúdo" como nó, fila de aprovação de cliente (ApprovalLink), biblioteca de formatos validados como marketplace.
+
+**Whitepaper do LabIA** (decisão do Felipe, 2026-07-04): documento didático explicando cada parte e funcionalidade da plataforma como passo a passo — como fazer fluxos, como pensar neles a partir do que você precisa. Gatilho da 1ª versão: fechamento da E2 (quando o pipeline de vídeo inteiro existir para ser documentado). Esqueleto vem da ordem canônica da pesquisa P8; capítulo de templates vem da P9; receitas vêm do `modulos/02-videos/TECNICAS.md`. Vive em `docs/WHITEPAPER.md` como doc vivo.
