@@ -22,7 +22,16 @@
 - 2026-07-03: custo acumulado estimado/real por nó e por fluxo, endpoint de estimativa antes da execução e serialização de custo para a UI. Validação real de execução ainda requer banco Supabase/Postgres configurado e worker importando `registerDefaultFlowWorker()`.
 - 2026-07-03: app reestruturado para o shell fixado no DESIGN-SYSTEM: top bar global com `Início`/`Fluxos`/`Biblioteca`, dashboard em `/`, cards de fluxos em `/fluxos`, canvas em `/fluxos/[id]` e paleta de nós como botão flutuante `+ Nó` dentro do canvas.
 
-(Templates: E2 · Video Director: E3 — tarefas detalhadas quando as etapas abrirem.)
+## Tarefas candidatas — Templates + Didática (aprovadas em spec 2026-07-04; timing: fim da E2 ou abertura da E3, decisão do Felipe na hora)
+
+T1. Nó utilitário "Revisar/Escolher" (custo zero) — candidato a adiantar para a E2, serve à escada de gerações reais.
+T2. `FlowTemplate` no Prisma (migration) + seeds da primeira leva (5 visíveis + 2 avançados) em arquivos versionados.
+T3. API de galeria + instanciação (validação de placeholders, substituição no grafo, custo estimado antes de criar).
+T4. UI: chooser no "Novo fluxo", galeria com cards/custo/badges, wizard de variáveis, canvas com pendências destacadas.
+T5. Didática incremental no canvas: picker por porta (Spotlight), tooltips de custo, conexão inválida explicada, empty state com receita.
+T6. Fases visuais leves no canvas + proveniência do asset na Biblioteca.
+
+(Video Director: E3 — tarefas detalhadas quando a etapa abrir.)
 
 ## Critérios de aceite (E1, validação externa)
 

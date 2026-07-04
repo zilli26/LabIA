@@ -46,7 +46,7 @@ Revisão independente: 18 fontes em cada, com URL+data; amostragem verificada de
 - **P8:** ordem canônica em 10 etapas (briefing → direção → copy → refs/prompts → geração → curadoria → montagem → adaptação por rede → publicação → aprendizado); 10 recomendações de UX didático priorizadas (top 5: chooser no lugar de canvas vazio, próximo nó sugerido por porta, nó "Revisar/Escolher" custo zero, tooltips de custo, conexão inválida explicada); manual do fluxo manual bem-feito hoje (candidato a 1ª receita do TECNICAS.md).
 - **P9:** primeira leva de 8 templates com custo típico (5 visíveis + 2 avançados recomendados); desenho `FlowTemplate` versionado com manifest de placeholders; UX galeria → wizard → canvas montado com custo antes.
 
-**PENDENTE DECISÃO DO FELIPE (SDD):** as pesquisas recomendam mudanças de spec (`modulos/03-fluxos/ESPECIFICACAO.md`, TECNICAS.md, DESIGN-SYSTEM.md, schema `FlowTemplate`) que só entram nos docs após aprovação dele. Os arquivos das pesquisas listam exatamente o que mudaria em cada doc ("Impacto nos docs").
+**DECISÃO DO FELIPE (2026-07-04): APROVADO — e com as 10 recomendações da P8, não só as top 5.** Aplicado nos docs pelo Claude: `modulos/03-fluxos/ESPECIFICACAO.md` (Templates com desenho da P9 + seção Didática do canvas com as 10), `CONSTRUCAO.md` (tarefas candidatas T1–T6; T1 "Revisar/Escolher" é candidato a adiantar para a E2), `decisoes.md` (4 decisões novas), `modulos/02-videos/TECNICAS.md` (Receita 1: fluxo manual bem-feito), `docs/DESIGN-SYSTEM.md` (seção UX didático). Timing de construção dos templates: fim da E2 ou abertura da E3 — Felipe decide na hora.
 
 ## E2 tarefa 2 concluída — nó `Gerar Vídeo` img2video no canvas (2026-07-04, Codex)
 

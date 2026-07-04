@@ -26,7 +26,18 @@ Princípio: **o áudio manda no corte, não o contrário.** O frame-chaining nos
 
 ## 4. Receitas replicáveis (tutoriais)
 
-> Cada tipo de vídeo dominado vira uma receita aqui: objetivo → modelo → prompts (template) → durações/cortes → trilha → custo total. Ainda vazio — preenche conforme validamos.
+> Cada tipo de vídeo dominado vira uma receita aqui: objetivo → modelo → prompts (template) → durações/cortes → trilha → custo total.
+
+### Receita 1 — Fluxo manual bem-feito (aprovada pelo Felipe 2026-07-04, base P8; 🧪 até a 1ª execução real)
+
+1. **Prompt inicial como briefing compacto:** objetivo, público, rede, formato, produto/personagem, mood, restrições, CTA. Salvar nomeado "Briefing" — prepara a semântica para o Video Director (E3).
+2. **Prompt de direção visual SEPARADO:** transformar o briefing em sujeito, ambiente, câmera, iluminação, estilo e critérios de aprovação. Não misturar briefing e prompt visual — revisão fica impossível.
+3. **Direção visual → `Gerar Imagem`:** modelo barato primeiro (FLUX dev R$0,14); se possível, variações antes do vídeo. A imagem é o gate visual: vídeo custa 10-100x mais e herda erro da imagem.
+4. **Revisar a imagem ANTES de `Gerar Vídeo`:** hoje é manual (olhar o asset); o nó "Revisar/Escolher" (spec aprovada no módulo 03) vai tornar esse gate explícito e de custo zero.
+5. **Imagem aprovada → `Gerar Vídeo`:** prompt de movimento com ação principal + movimento de câmera + ritmo + continuidade de personagem/produto + restrições.
+6. **Com `Estender Vídeo`: re-declarar o bloco de consistência em CADA clipe** (personagem/produto, câmera, luz, estilo, estado final) — regra da P2 contra deriva.
+7. **Com `Montagem`: ordenar clipes por intenção e áudio.** A receita oficial de 30s+ é "direção de cenas + montagem", não "dar extend até 30s". Continuidade sonora vem da trilha na Montagem; emendas caem em beats (seção 2).
+8. **Registrar custo e aprendizado** no log abaixo após CADA geração real — obrigatório na E2.
 
 - [ ] Receita: produto em 360° (30s, trilha com beat)
 - [ ] Receita: cena narrativa com personagem consistente

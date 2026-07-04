@@ -84,6 +84,15 @@ O LabIA é um APP com páginas, não uma tela única de canvas:
 
 Racional: sidebar fixa de paleta era peso permanente para uma ação eventual (adicionar nó); navegação por funcionalidade é o que dá cara de produto.
 
+## UX didático do canvas (aprovado 2026-07-04, base P8 — requisitos, detalhe em modulos/03-fluxos/ESPECIFICACAO.md)
+
+- Novo fluxo abre chooser (do zero / receita), nunca canvas vazio por padrão.
+- Arrastar de porta para o vazio → picker filtrado por nós compatíveis, com custo no tooltip.
+- Tooltip de nó (paleta e canvas): descrição + capacidades + custo estimado em R$ (mono, par reagente).
+- Conexão inválida: bloqueio + texto curto explicando o porquê e sugerindo o caminho.
+- Fases de produção como bandas discretas no fundo do canvas (nomes da ordem canônica), sem virar BPMN.
+- Empty state sempre com uma receita concreta como CTA.
+
 ## A fazer na E1
 
 - [x] Fixar paleta final (hex) e tipografia — v1, 2026-07-03
