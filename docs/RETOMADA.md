@@ -4,6 +4,10 @@
 
 Felipe solicitou enviar o projeto para o GitHub após conectar o LabIA à Vercel, para continuar pelo ChatGPT.
 
+**Resultado confirmado:** aplicação e plano enviados no commit `e3be15080fbd73df7ec3aa45676e5a6652a70048`. Leitura de README e do prompt de retomada confirmada pela integração GitHub. Deploy automático de origem `git` para esse commit ficou **READY** (`dpl_J7a1NS571A4G5JZ8pYcZFpxVxjcW`). O site principal, `/fluxos` e `/api/flows/node-definitions` retornaram HTTP 200; o registry publicado contém os quatro nós de vídeo, além dos cinco nós básicos/imagem.
+
+**Pendência operacional encontrada:** `/biblioteca` retornou HTTP 500. A integração Supabase informou projeto `LabIA` (`kbqjgyvytxxjlmojlyhr`) em estado **INACTIVE**. Logs de produção confirmaram `PrismaClientInitializationError` e falha de resolução do tenant do pooler. Uma consulta local somente de leitura também não alcançou o banco. Não confundir HTTP 200 da página inicial/Fluxos com persistência funcionando: existem fallbacks na UI. Antes de testes com dados ou geração, reativar o projeto Supabase e validar banco/Storage, credenciais e worker. O banco não foi restaurado, migrado ou alterado nesta entrega de publicação.
+
 - Repositório confirmado: `https://github.com/zilli26/LabIA`, branch `main`, remoto `origin` configurado. O commit inicial remoto (README) foi incorporado preservando o histórico local, sem force push.
 - Este pacote inclui aplicação, testes, migrations, pesquisas, arquivos do protótipo de landing e o planejamento OAuth/Google/MCP. O README apresenta a ordem de leitura e separa implementação, protótipo e trabalho futuro.
 - O prompt de retomada agora aponta para o repositório. Os registros de ausência de remoto e atraso de 19 commits abaixo são históricos, anteriores a este envio; conferir revisão publicada separadamente na Vercel.

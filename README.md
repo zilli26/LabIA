@@ -24,7 +24,9 @@ Este é o repositório de continuidade: [zilli26/LabIA](https://github.com/zilli
 | OAuth de geração OpenAI/Google, MCP e personagem consistente | Plano e pesquisa; integrações ainda não implementadas |
 | TikTok Shop, publicação e operação multi-conta | Trabalho futuro |
 
-O site é [labia-hazel.vercel.app](https://labia-hazel.vercel.app). A revisão publicada deve ser conferida na Vercel: subir código no GitHub e concluir um deploy são eventos distintos. A geração depende também de um worker ativo, separado do site.
+O site é [labia-hazel.vercel.app](https://labia-hazel.vercel.app). O deploy automático GitHub → Vercel foi confirmado READY para `e3be150` em 10/09/2026. A geração depende também de um worker ativo, separado do site.
+
+**Pendência operacional em 10/09/2026:** o projeto Supabase LabIA está `INACTIVE`; a Biblioteca retorna erro 500 por indisponibilidade do banco. Reativar e verificar banco/Storage antes de testar persistência ou geração. Detalhes e evidências em [RETOMADA](docs/RETOMADA.md). O deploy bem-sucedido não resolve essa dependência.
 
 ## Desenvolvimento local
 
