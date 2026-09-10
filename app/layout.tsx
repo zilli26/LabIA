@@ -5,6 +5,7 @@ import "./globals.css";
 
 import { AppShell } from "@/components/app/app-shell";
 import { getCurrentMonthSpendBrl } from "@/lib/db/flows";
+import { formatBrl } from "@/lib/format";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -28,13 +29,6 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-function formatBrl(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
-
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -43,7 +37,7 @@ export default async function RootLayout({
   const monthSpend = await getCurrentMonthSpendBrl().catch(() => 0);
 
   return (
-    <html lang="pt-BR" className="dark">
+    <html lang="pt-BR" className="dark" data-scroll-behavior="smooth">
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} ${jetBrainsMono.variable}`}
       >

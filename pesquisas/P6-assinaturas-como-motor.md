@@ -1,5 +1,7 @@
 # P6 — Assinaturas como motor de IA (padrão Hermes)
 
+> Revisão de evidência em 2026-09-10: a limitação absoluta a texto abaixo ficou desatualizada. Foi inspecionado um plugin Hermes de imagem por OAuth ChatGPT/Codex, com referências. Ver `docs/PLANO-CHATGPT-MCP-E-PRODUCAO.md`, seção 3, para fonte versionada, limites da evidência e testes ainda necessários. Também não usar as afirmações históricas sobre condições comerciais como análise atual de todos os provedores; avaliar cada rota antes de oferecê-la. O texto abaixo é a pesquisa histórica de julho, não comprovação de conexão atual.
+
 **Data:** 2026-07-02 · **Passadas:** 2
 
 ## Veredito

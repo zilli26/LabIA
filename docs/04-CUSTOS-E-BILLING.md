@@ -32,6 +32,8 @@ fal.ai: US$10-20 no signup (cobre o dev da E1/E2) · Replicate: créditos pequen
 
 ## Rotas por assinatura — padrão Hermes (P6)
 
+> Atualização de evidência, 2026-09-10: existe implementação Hermes de geração de imagem por OAuth ChatGPT/Codex. Portanto, a afirmação absoluta sobre ausência de rota para imagem no parágrafo histórico abaixo não deve orientar novos trabalhos. Ver `docs/PLANO-CHATGPT-MCP-E-PRODUCAO.md`: testar consumo real por conexão, distinguir cota do plano de desembolso em R$ e avaliar condições comerciais por provedor. Nenhuma conexão ou economia foi validada na conta nesta revisão.
+
 Texto (copy/estratégia/research): viável rodar pelo plano ChatGPT Plus (Codex CLI `codex exec` via OAuth) e Claude Max (headless) através de um **worker local** na máquina do Felipe que consome a fila. Imagem/vídeo: NÃO tem rota de assinatura — segue API. Linha vermelha: só uso pessoal; no SaaS (E6) tudo migra para API. Detalhes: `pesquisas/P6-assinaturas-como-motor.md`.
 
 ## Local vs. API vs. GPU nuvem — break-even (P7)

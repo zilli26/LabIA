@@ -19,6 +19,8 @@ Máxima familiaridade para qualquer IA construtora (Codex/Claude), menor atrito 
 
 ## A abstração central: `ModelProvider`
 
+> Planejamento em revisão, 2026-09-10: `docs/PLANO-CHATGPT-MCP-E-PRODUCAO.md` propõe operação pelo ChatGPT/MCP, conexões pessoais e imagem por OAuth com base em código Hermes inspecionado. A restrição histórica “SÓ para texto” abaixo não descreve todas as capacidades atuais. Novos adaptadores, autorização e contratos ainda não estão implementados nem aprovados em spec.
+
 Toda geração passa por uma interface própria — nunca chamar fal.ai/Replicate direto do código de feature:
 
 ```ts

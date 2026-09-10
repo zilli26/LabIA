@@ -1,0 +1,19 @@
+/*
+ * Layout da narrativa de scroll da landing (F1 — estático).
+ * Regra de ouro: nenhum seletor default com opacity:0 ou visibility:hidden.
+ * O estado final legível É o default; animações/reveals entram em fases futuras.
+ */
+
+#painel {
+  scroll-margin-top: 3.5rem;
+}
+
+[data-beat] {
+  scroll-margin-top: 3.5rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}

@@ -1,5 +1,55 @@
 # RETOMADA - estado vivo do projeto
 
+## Publicação do projeto no GitHub — 2026-09-10
+
+Felipe solicitou enviar o projeto para o GitHub após conectar o LabIA à Vercel, para continuar pelo ChatGPT.
+
+- Repositório confirmado: `https://github.com/zilli26/LabIA`, branch `main`, remoto `origin` configurado. O commit inicial remoto (README) foi incorporado preservando o histórico local, sem force push.
+- Este pacote inclui aplicação, testes, migrations, pesquisas, arquivos do protótipo de landing e o planejamento OAuth/Google/MCP. O README apresenta a ordem de leitura e separa implementação, protótipo e trabalho futuro.
+- O prompt de retomada agora aponta para o repositório. Os registros de ausência de remoto e atraso de 19 commits abaixo são históricos, anteriores a este envio; conferir revisão publicada separadamente na Vercel.
+- Validação antes do envio: **112 testes em 11 arquivos**, lint e build de produção passaram; o build incluiu checagem de tipos. `git diff --check` limpo. Arquivos de ambiente reais e `.vercel` ignorados; `.env.example` é o modelo versionado. Checagem de padrões de credenciais e correspondências com segredos locais não encontrou ocorrências nos arquivos publicáveis nem no histórico.
+- Próxima ação no ChatGPT: ler README → VISAO → esta seção de RETOMADA → PLANO-CHATGPT-MCP-E-PRODUCAO → PROMPT-RETOMADA-CHATGPT. Começar pela preparação de P0/P1. OAuth de geração, MCP, consistência e publicação TikTok continuam pendentes; subir o código não os implementa.
+- Worker e gerações não foram iniciados neste envio. O resultado do deploy automático deve ser verificado pelo commit na Vercel, independentemente do sucesso do push.
+
+## Planejamento para operar pelo ChatGPT — 2026-09-10
+
+Felipe pediu um plano por etapas para conexões OpenAI/Google, MCP e produção com personagem/produto consistentes, incluindo montagem futura de até 15 minutos. Quer continuar pelo **ChatGPT**, não pela interface Codex, e informou que conectará o GitHub.
+
+- Entrega: `docs/PLANO-CHATGPT-MCP-E-PRODUCAO.md`, com arquitetura proposta, matriz de conexões, contratos MCP, fases P0–P6, testes, limites de custo e critérios de continuidade entre cenas.
+- Retomada pronta: `docs/PROMPT-RETOMADA-CHATGPT.md`. Anexar os arquivos ao novo chat ou disponibilizá-los no GitHub; eles ainda não foram enviados ao remoto.
+- Correção de evidência: o Hermes contém plugin de imagem `openai-codex` com OAuth e referências, inspecionado no commit `e83816a4d1998245968949e88fa15f26d89800c0`. As afirmações antigas de que assinatura só pode servir a texto não são mais uma premissa válida. A rota existe em código de terceiro, mas ainda precisa ser testada na conta do Felipe e integrada ao LabIA.
+- Google: separar login Gemini CLI, OAuth/API com projeto Cloud e uso da assinatura Flow. Existem pontes comunitárias; nenhuma foi validada nesta sessão. Não tratar login como prova de geração ou consumo da assinatura.
+- Proposta: ChatGPT e canvas usam os mesmos serviços LabIA; MCP autenticado; fila e executor persistentes; conexões pessoais separadas de APIs pagas. Antes de exposição MCP, resolver autorização por usuário/workspace, pois o código atual usa workspace padrão. As decisões técnicas novas continuam propostas, sem aprovação de spec ou implementação.
+- Próxima ação: P0/P1 no ChatGPT — confirmar acesso/revisão do repo, consolidar as capacidades OpenAI/Google e preparar o primeiro experimento e as specs mínimas. Nenhuma geração, instalação de ponte, login, push, deploy ou mudança de banco foi feita nesta sessão de planejamento.
+
+## Auditoria de panorama — 2026-09-10 (Codex)
+
+Felipe retomou a ideia de produzir conteúdo afiliado para TikTok Shop com um personagem sintético por conta. Esta sessão verifica o estado; não aprova novo escopo de implementação nem geração paga.
+
+- **Vercel verificada ao vivo:** projeto `labia`, produção `READY`, domínio `https://labia-hazel.vercel.app`. GET de `/`, `/fluxos` e `/api/flows/node-definitions` retornou HTTP 200 sem login nesta consulta. Isso supera a pendência histórica de acesso público abaixo.
+- **Produção está atrás do local:** deployment `dpl_wZS1f93ZChYfuWGUFnU1efHpf9yw`, origem `cli`, commit `1e257310d5b7cdb60d5637dd8d02f23b7da2dee7`; HEAD local `aa87af9`, 19 commits à frente. A API publicada registra apenas Texto, Nota, Saída, Prompt e Gerar Imagem; os nós de vídeo locais não estão nesse deploy.
+- **GitHub:** `git remote -v` vazio. Busca pela integração GitHub por `LabIA user:zilli26` sem resultados acessíveis. Não há conexão remota configurada neste checkout e não foi comprovado deploy automático GitHub → Vercel.
+- **Implementação local:** canvas, imagem via fal.ai e vídeo até tarefa 7 permanecem presentes. Retry seletivo continua pendente. Referência/edição para consistência de personagem e produto, Director/roteiros, legendas, integração de produtos/afiliados e publicação TikTok não estão implementados. Assinaturas Google/OpenAI não estão conectadas como providers; a arquitetura documenta assinatura para texto como trabalho futuro.
+- **Validação atual:** `npx --no-install vitest run` passou (11 arquivos, 112 testes); `npm run typecheck` passou. São verificações locais sem geração paga; não comprovam o pipeline de vídeo real. A prova anterior de imagem permanece evidência histórica, sem nova geração nesta auditoria.
+- **Execução:** worker continua necessário para consumir a fila; nesta consulta não foi identificado processo Node com os scripts `scripts/worker` ou `scripts/image-worker`. Nenhum worker foi iniciado e nenhuma geração foi enfileirada. Saldo fal.ai e disponibilidade atual dos endpoints não foram revalidados.
+- **Retomada proposta, ainda sem promover a nova spec:** validar um produto e um personagem em cenas consistentes, depois um clipe curto e uma montagem vertical. Declarar orçamento atualizado em R$ e obter aprovação a cada geração. A prova completa de vídeo e a operação em múltiplas contas continuam pendentes.
+
+Os registros abaixo são históricos; usar a auditoria acima para distinguir versão local, versão publicada e funcionalidade apenas prevista.
+
+> Ultima atualizacao: **2026-07-04, Codex P10** - pesquisa de referencias da landing concluida com duas passadas; `docs/DESIGN-LANDING.md` atualizado com stack v1 (SVG inline + CSS scroll-driven progressivo + IntersectionObserver; sem GSAP/Motion/Lenis na v1), inventario de efeitos e referencias. Nenhuma geracao de API; custo R$0.
+
+## P10 concluida - referencias de landing/scrollytelling (2026-07-04, Codex)
+
+Saidas:
+
+- `pesquisas/P10-referencias-landing-scrollytelling.md`: substituido o brief por pesquisa executada, com veredito, tabela de referencias, tabela de tecnicas, stack recomendada, parametros de efeitos, acessibilidade/performance, armadilhas e fontes.
+- `docs/DESIGN-LANDING.md`: secoes 3 e 5 preenchidas com inventario executavel e referencias resumidas. Direcao tecnica v1: SVG inline + `position: sticky` + CSS scroll-driven animations como melhoria progressiva + `IntersectionObserver` para reveals; fallback sem JS/reduced motion sempre legivel.
+- `pesquisas/README.md`: indice atualizado com P8, P9 e P10 concluidas.
+
+Decisao tecnica da P10: nao instalar GSAP, Motion ou Lenis na v1 da landing. Reavaliar GSAP ScrollTrigger apenas se o prototipo provar que CSS+IO nao sustenta o pin curto do hero.
+
+Proxima acao: Felipe/Claude cruzarem a P10 com `docs/DESIGN-LANDING.md` para aprovar a direcao antes de Fable construir a landing e o `/Inicio`.
+
 > Atualizado a cada fim de sessão de orquestração. Próxima sessão (Claude ou Codex): leia isto DEPOIS do CLAUDE.md e ANTES de qualquer trabalho.
 > Última atualização: **2026-07-04, Codex tarefa 7** — modal de confirmação de custo total implementado e validado por DOM/Prisma; banco final com 0 Generations de vídeo e 0 jobs pendentes. Observação honesta: a validação do fluxo só de imagem preservou execução direta e um worker já ativo no ambiente processou 1 imagem FLUX real (R$0,135); registro/job temporários foram apagados, mas houve gasto de imagem.
 
