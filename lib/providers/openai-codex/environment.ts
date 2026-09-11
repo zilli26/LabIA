@@ -2,6 +2,8 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 
+export type EnvMap = Record<string, string | undefined>;
+
 const CREDENTIAL_REF_PATTERN = /^codex-[a-zA-Z0-9-]{12,}$/;
 
 const BLOCKED_CHILD_ENV = new Set([
@@ -13,11 +15,11 @@ const BLOCKED_CHILD_ENV = new Set([
   "OPENAI_PROJECT",
 ]);
 
-export function getCodexBinary(env: NodeJS.ProcessEnv = process.env) {
+export function getCodexBinary(env: EnvMap = process.env) {
   return env.LABIA_CODEX_BIN?.trim() || "codex";
 }
 
-export function getProviderDataRoot(env: NodeJS.ProcessEnv = process.env) {
+export function getProviderDataRoot(env: EnvMap = process.env) {
   const configured = env.LABIA_PROVIDER_DATA_DIR?.trim();
 
   if (!configured) {
@@ -29,7 +31,7 @@ export function getProviderDataRoot(env: NodeJS.ProcessEnv = process.env) {
 
 export function getConnectionCodexHome(
   credentialRef: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvMap = process.env,
 ) {
   if (!CREDENTIAL_REF_PATTERN.test(credentialRef)) {
     throw new Error("Invalid provider credential reference.");
@@ -40,7 +42,7 @@ export function getConnectionCodexHome(
 
 export async function ensureConnectionCodexHome(
   credentialRef: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvMap = process.env,
 ) {
   const codexHome = getConnectionCodexHome(credentialRef, env);
   await mkdir(codexHome, { recursive: true, mode: 0o700 });
@@ -49,9 +51,9 @@ export async function ensureConnectionCodexHome(
 
 export function buildCodexChildEnv(
   codexHome: string,
-  source: NodeJS.ProcessEnv = process.env,
-) {
-  const childEnv: NodeJS.ProcessEnv = {};
+  source: EnvMap = process.env,
+): EnvMap {
+  const childEnv: EnvMap = {};
 
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined || BLOCKED_CHILD_ENV.has(key)) {
