@@ -10,6 +10,8 @@ import {
 } from "../../lib/providers/openai-codex/app-server-client";
 
 type DataListener = (chunk: Buffer | string) => void;
+type ExitListener = (code: number | null, signal: NodeJS.Signals | null) => void;
+type ErrorListener = (error: Error) => void;
 
 class FakeStream {
   private listeners: DataListener[] = [];
@@ -28,6 +30,9 @@ class FakeCodexProcess implements CodexProcess {
   readonly stderr = new FakeStream();
   readonly writes: Record<string, unknown>[] = [];
   killed = false;
+  suppressAccountRead = false;
+  private readonly exitListeners: ExitListener[] = [];
+  private readonly errorListeners: ErrorListener[] = [];
 
   readonly stdin = {
     write: (chunk: string) => {
@@ -39,14 +44,14 @@ class FakeCodexProcess implements CodexProcess {
     end: () => undefined,
   };
 
-  on(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
-  on(event: "error", listener: (error: Error) => void): unknown;
-  on(
-    _event: "exit" | "error",
-    _listener:
-      | ((code: number | null, signal: NodeJS.Signals | null) => void)
-      | ((error: Error) => void),
-  ) {
+  on(event: "exit", listener: ExitListener): unknown;
+  on(event: "error", listener: ErrorListener): unknown;
+  on(event: "exit" | "error", listener: ExitListener | ErrorListener) {
+    if (event === "exit") {
+      this.exitListeners.push(listener as ExitListener);
+    } else {
+      this.errorListeners.push(listener as ErrorListener);
+    }
     return undefined;
   }
 
@@ -60,6 +65,20 @@ class FakeCodexProcess implements CodexProcess {
       method: "account/login/completed",
       params: { loginId, success, error: null },
     });
+  }
+
+  emitExit() {
+    for (const listener of this.exitListeners) listener(1, null);
+  }
+
+  emitError() {
+    for (const listener of this.errorListeners) {
+      listener(new Error("raw secret-adjacent process error"));
+    }
+  }
+
+  emitMalformedJson() {
+    this.stdout.emit("{not-json}\n");
   }
 
   private respond(message: Record<string, unknown>) {
@@ -102,7 +121,9 @@ class FakeCodexProcess implements CodexProcess {
     }
 
     if (method === "account/read") {
-      this.respond({ id, result: { account: null, requiresOpenaiAuth: true } });
+      if (!this.suppressAccountRead) {
+        this.respond({ id, result: { account: null, requiresOpenaiAuth: true } });
+      }
       return;
     }
 
@@ -118,6 +139,19 @@ afterEach(async () => {
     tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
 });
+
+async function makeClient(fake = new FakeCodexProcess()) {
+  const root = await mkdtemp(join(tmpdir(), "labia-o1-"));
+  tempDirs.push(root);
+  const client = new CodexAppServerClient({
+    credentialRef: "codex-abcdef123456",
+    spawnProcess: () => fake,
+    env: { LABIA_PROVIDER_DATA_DIR: root },
+    requestTimeoutMs: 50,
+  });
+  await client.start();
+  return { client, fake, root };
+}
 
 describe("CodexAppServerClient", () => {
   it("initializes over JSONL and isolates CODEX_HOME from current Codex/API credentials", async () => {
@@ -163,17 +197,15 @@ describe("CodexAppServerClient", () => {
     client.close();
   });
 
-  it("supports device-code login, completion notification, cancel and logout without generation", async () => {
-    const root = await mkdtemp(join(tmpdir(), "labia-o1-"));
-    tempDirs.push(root);
-    const fake = new FakeCodexProcess();
-    const client = new CodexAppServerClient({
-      credentialRef: "codex-abcdef123456",
-      spawnProcess: () => fake,
-      env: { LABIA_PROVIDER_DATA_DIR: root },
+  it("supports browser and device-code login without generation", async () => {
+    const { client, fake } = await makeClient();
+
+    await expect(client.startLogin("chatgpt")).resolves.toMatchObject({
+      type: "chatgpt",
+      loginId: "login-browser",
+      authUrl: "https://chatgpt.com/fake",
     });
 
-    await client.start();
     const login = await client.startLogin("chatgptDeviceCode");
     expect(login).toMatchObject({
       type: "chatgptDeviceCode",
@@ -209,19 +241,33 @@ describe("CodexAppServerClient", () => {
   });
 
   it("times out a login wait without exposing provider payloads", async () => {
-    const root = await mkdtemp(join(tmpdir(), "labia-o1-"));
-    tempDirs.push(root);
-    const fake = new FakeCodexProcess();
-    const client = new CodexAppServerClient({
-      credentialRef: "codex-timeout123456",
-      spawnProcess: () => fake,
-      env: { LABIA_PROVIDER_DATA_DIR: root },
-    });
-
-    await client.start();
+    const { client } = await makeClient();
     await expect(client.waitForLogin("never", 5)).rejects.toThrow(
       "did not complete",
     );
     client.close();
+  });
+
+  it("rejects a pending request when the App Server exits", async () => {
+    const { client, fake } = await makeClient();
+    fake.suppressAccountRead = true;
+    const pending = client.readAccount(false);
+    fake.emitExit();
+    await expect(pending).rejects.toThrow("became unavailable");
+  });
+
+  it("sanitizes process errors and malformed JSON", async () => {
+    const first = await makeClient();
+    first.fake.suppressAccountRead = true;
+    const pendingError = first.client.readAccount(false);
+    first.fake.emitError();
+    await expect(pendingError).rejects.toThrow("became unavailable");
+    await expect(pendingError).rejects.not.toThrow("secret-adjacent");
+
+    const second = await makeClient();
+    second.fake.suppressAccountRead = true;
+    const pendingJson = second.client.readAccount(false);
+    second.fake.emitMalformedJson();
+    await expect(pendingJson).rejects.toThrow("became unavailable");
   });
 });
