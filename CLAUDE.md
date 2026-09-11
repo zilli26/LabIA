@@ -1,10 +1,10 @@
 # LabIA — Regras de trabalho neste repositório
 
-> Este arquivo é idêntico ao `AGENTS.md` (lido pelo Codex). Se editar um, espelhe no outro.
+> Este arquivo é idêntico ao `AGENTS.md`. Se editar um, espelhe no outro.
 
 ## O que é este projeto
 
-LabIA ("laboratório" + "lábia") é a plataforma dos sonhos de um social media: geração de imagem/vídeo pay-per-use via API, canvas de fluxos estilo n8n como espinha dorsal, copywriting com voz de marca, design, calendário/publicação multi-rede, research e estratégia. Dono: Felipe Zilli (social media). Leia `docs/00-VISAO.md` antes de qualquer coisa.
+LabIA ("laboratório" + "lábia") é a plataforma dos sonhos de um social media: geração de imagem/vídeo por múltiplos providers, canvas de fluxos estilo n8n como espinha dorsal, copywriting com voz de marca, design, calendário/publicação multi-rede, research e estratégia. Dono: Felipe Zilli (social media). Leia `docs/00-VISAO.md` antes de qualquer coisa.
 
 ## Mapa de leitura obrigatória (nesta ordem)
 
@@ -25,13 +25,14 @@ Ao encerrar uma sessão de orquestração, atualize o `docs/RETOMADA.md` (decis�
 5. **Decisões viram registro**: decisão técnica de escopo geral → `docs/adr/`; decisão local de módulo → `modulos/<x>/decisoes.md`. Sempre com o "por quê".
 6. **Status atualizado**: ao terminar trabalho num módulo, atualize a seção "Status" do `CONSTRUCAO.md` daquele módulo.
 7. **Qualidade visual é requisito**: siga `docs/DESIGN-SYSTEM.md` em toda tela. Nada de UI genérica de template.
+8. **Provider é decisão do nó, não da plataforma**: não existe provider principal do LabIA. Todo nó gerativo converge para `Provider → Conexão → Modelo`, conforme ADR 0002. fal.ai continua disponível; conexões pessoais não criam fallback automático para API paga.
 
 ## Stack (resumo — detalhes em docs/01-ARQUITETURA.md)
 
-Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui customizado · Supabase (Postgres/auth/storage) + Prisma · fal.ai (gateway principal de geração) atrás de abstração `ModelProvider` · Vercel AI SDK p/ agentes de texto · React Flow p/ canvas · pg-boss p/ jobs assíncronos.
+Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui customizado · Supabase (Postgres/auth/storage) + Prisma · providers de geração atrás da abstração `ModelProvider` (fal.ai já disponível; OpenAI/ChatGPT local em O1 via `ProviderConnection`) · Vercel AI SDK p/ agentes de texto · React Flow p/ canvas · pg-boss p/ jobs assíncronos.
 
 ## Convenções
 
 - Idioma dos docs e da UI: **português (BR)**. Código, nomes de variáveis e commits: inglês.
 - Commits pequenos e frequentes; mensagem explica o porquê.
-- Segredos só em `.env.local` (nunca commitado). `.env.example` documenta as chaves necessárias.
+- Segredos só em `.env.local` ou storage local dedicado do executor (nunca commitados). `.env.example` documenta as chaves/configurações necessárias.
