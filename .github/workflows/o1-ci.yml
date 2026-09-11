@@ -1,0 +1,47 @@
+name: O1 OAuth CI
+
+on:
+  push:
+    branches:
+      - feat/o1-openai-oauth
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies without Prisma postinstall
+        run: npm ci
+        env:
+          PRISMA_SKIP_POSTINSTALL_GENERATE: "true"
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/labia
+          DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/labia
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit and DOM tests
+        run: npx vitest run
+
+      - name: Production build without database access
+        run: npx next build
