@@ -16,6 +16,7 @@ const primaryNav = [
   { label: "Início", href: "/" },
   { label: "Fluxos", href: "/fluxos" },
   { label: "Biblioteca", href: "/biblioteca" },
+  { label: "Conexões", href: "/conexoes" },
 ];
 
 const futureNav = ["Copy", "Calendário", "Research"];
