@@ -39,15 +39,15 @@ class FakeCodexProcess implements CodexProcess {
     end: () => undefined,
   };
 
-  private exitListeners: Array<(code: number | null, signal: NodeJS.Signals | null) => void> = [];
-  private errorListeners: Array<(error: Error) => void> = [];
-
-  on(event: "exit" | "error", listener: ((...args: never[]) => void) | ((error: Error) => void)) {
-    if (event === "exit") {
-      this.exitListeners.push(listener as (code: number | null, signal: NodeJS.Signals | null) => void);
-    } else {
-      this.errorListeners.push(listener as (error: Error) => void);
-    }
+  on(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  on(event: "error", listener: (error: Error) => void): unknown;
+  on(
+    _event: "exit" | "error",
+    _listener:
+      | ((code: number | null, signal: NodeJS.Signals | null) => void)
+      | ((error: Error) => void),
+  ) {
+    return undefined;
   }
 
   kill() {
@@ -81,7 +81,11 @@ class FakeCodexProcess implements CodexProcess {
       if (params.type === "chatgpt") {
         this.respond({
           id,
-          result: { type: "chatgpt", loginId: "login-browser", authUrl: "https://chatgpt.com/fake" },
+          result: {
+            type: "chatgpt",
+            loginId: "login-browser",
+            authUrl: "https://chatgpt.com/fake",
+          },
         });
       } else {
         this.respond({
@@ -110,7 +114,9 @@ class FakeCodexProcess implements CodexProcess {
 
 const tempDirs: string[] = [];
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })),
+  );
 });
 
 describe("CodexAppServerClient", () => {
@@ -118,9 +124,14 @@ describe("CodexAppServerClient", () => {
     const root = await mkdtemp(join(tmpdir(), "labia-o1-"));
     tempDirs.push(root);
     const fake = new FakeCodexProcess();
-    let spawnCall: Parameters<SpawnCodexProcess> | null = null;
-    const spawnProcess: SpawnCodexProcess = (...args) => {
-      spawnCall = args;
+    let capturedCommand = "";
+    let capturedArgs: string[] = [];
+    let capturedEnv: Record<string, string | undefined> = {};
+
+    const spawnProcess: SpawnCodexProcess = (command, args, options) => {
+      capturedCommand = command;
+      capturedArgs = args;
+      capturedEnv = options.env;
       return fake;
     };
 
@@ -139,13 +150,12 @@ describe("CodexAppServerClient", () => {
 
     await client.start();
 
-    expect(spawnCall?.[0]).toBe("codex-test");
-    expect(spawnCall?.[1]).toEqual(["app-server"]);
-    const childEnv = spawnCall?.[2].env;
-    expect(childEnv?.CODEX_HOME).toContain("codex-123456789abc");
-    expect(childEnv?.CODEX_HOME).not.toContain("existing-codex");
-    expect(childEnv?.OPENAI_API_KEY).toBeUndefined();
-    expect(childEnv?.CODEX_API_KEY).toBeUndefined();
+    expect(capturedCommand).toBe("codex-test");
+    expect(capturedArgs).toEqual(["app-server"]);
+    expect(capturedEnv.CODEX_HOME).toContain("codex-123456789abc");
+    expect(capturedEnv.CODEX_HOME).not.toContain("existing-codex");
+    expect(capturedEnv.OPENAI_API_KEY).toBeUndefined();
+    expect(capturedEnv.CODEX_API_KEY).toBeUndefined();
     expect(fake.writes[0]).toMatchObject({ method: "initialize" });
     expect(fake.writes[0]).not.toHaveProperty("jsonrpc");
     expect(fake.writes[1]).toEqual({ method: "initialized" });
@@ -182,10 +192,18 @@ describe("CodexAppServerClient", () => {
     await client.cancelLogin("login-device");
     await client.logout();
 
-    expect(fake.writes.map((message) => message.method)).toContain("account/login/cancel");
-    expect(fake.writes.map((message) => message.method)).toContain("account/logout");
-    expect(fake.writes.map((message) => message.method)).not.toContain("thread/start");
-    expect(fake.writes.map((message) => message.method)).not.toContain("turn/start");
+    expect(fake.writes.map((message) => message.method)).toContain(
+      "account/login/cancel",
+    );
+    expect(fake.writes.map((message) => message.method)).toContain(
+      "account/logout",
+    );
+    expect(fake.writes.map((message) => message.method)).not.toContain(
+      "thread/start",
+    );
+    expect(fake.writes.map((message) => message.method)).not.toContain(
+      "turn/start",
+    );
 
     client.close();
   });
@@ -201,7 +219,9 @@ describe("CodexAppServerClient", () => {
     });
 
     await client.start();
-    await expect(client.waitForLogin("never", 5)).rejects.toThrow("did not complete");
+    await expect(client.waitForLogin("never", 5)).rejects.toThrow(
+      "did not complete",
+    );
     client.close();
   });
 });
