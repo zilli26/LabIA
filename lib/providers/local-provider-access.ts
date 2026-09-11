@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 
+import type { EnvMap } from "@/lib/providers/openai-codex/environment";
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 export type LocalAccessDecision =
@@ -12,7 +14,7 @@ export type LocalAccessDecision =
 
 export function checkLocalProviderAccess(
   request: Pick<NextRequest, "url" | "headers">,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvMap = process.env,
 ): LocalAccessDecision {
   if (
     env.LABIA_LOCAL_OPENAI_OAUTH_ENABLED !== "true" ||
