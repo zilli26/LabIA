@@ -47,7 +47,7 @@ function fakeProcessFactory(onRequest?: (message: Record<string, unknown>) => vo
       stderr,
       kill: () => true,
       once: emitter.once.bind(emitter),
-    } as ReturnType<CodexProcessFactory>;
+    } as unknown as ReturnType<CodexProcessFactory>;
   };
 
   return {
