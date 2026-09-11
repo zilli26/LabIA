@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { ConnectionStateSummary } from "@/components/providers/provider-connections-panel";
+import { ConnectionStateSummary, ProviderConnectionsPanel } from "@/components/providers/provider-connections-panel";
 import type { ProviderConnectionDto } from "@/lib/provider-connections/types";
 
 const connection: ProviderConnectionDto = {
@@ -37,5 +37,14 @@ describe("ProviderConnection DOM contract", () => {
     expect(html).toContain('data-id="real-generation-state"');
     expect(html).toContain("Não validada");
     expect(html).not.toContain("Disponível e verificada");
+  });
+
+  it("não consulta nem mostra ações de conexão antes do token local", () => {
+    const html = renderToStaticMarkup(<ProviderConnectionsPanel />);
+    expect(html).toContain('data-id="provider-connections-lock"');
+    expect(html).toContain('data-id="local-connections-token"');
+    expect(html).toContain('type="password"');
+    expect(html).toContain("LABIA_LOCAL_CONNECTIONS_TOKEN");
+    expect(html).not.toContain("Adicionar ChatGPT");
   });
 });
