@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -29,7 +30,7 @@ const connection: ProviderConnectionDto = {
 
 describe("ProviderConnection DOM contract", () => {
   it("não transforma login conectado em capacidade ou geração validada", () => {
-    const html = renderToStaticMarkup(<ConnectionStateSummary connection={connection} />);
+    const html = renderToStaticMarkup(createElement(ConnectionStateSummary, { connection }));
     expect(html).toContain('data-id="account-connection-state"');
     expect(html).toContain("Conectada");
     expect(html).toContain('data-id="image-capability-state"');
@@ -40,7 +41,7 @@ describe("ProviderConnection DOM contract", () => {
   });
 
   it("não consulta nem mostra ações de conexão antes do token local", () => {
-    const html = renderToStaticMarkup(<ProviderConnectionsPanel />);
+    const html = renderToStaticMarkup(createElement(ProviderConnectionsPanel));
     expect(html).toContain('data-id="provider-connections-lock"');
     expect(html).toContain('data-id="local-connections-token"');
     expect(html).toContain('type="password"');
