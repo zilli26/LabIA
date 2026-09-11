@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const findFirst = vi.fn();
-const findMany = vi.fn();
-const create = vi.fn();
-const updateMany = vi.fn();
+const mocks = vi.hoisted(() => ({
+  findFirst: vi.fn(),
+  findMany: vi.fn(),
+  create: vi.fn(),
+  updateMany: vi.fn(),
+}));
+
+vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     providerConnection: {
-      findFirst,
-      findMany,
-      create,
-      updateMany,
+      findFirst: mocks.findFirst,
+      findMany: mocks.findMany,
+      create: mocks.create,
+      updateMany: mocks.updateMany,
     },
   },
 }));
@@ -61,9 +65,9 @@ afterEach(() => {
 
 describe("provider connection ownership", () => {
   it("consulta por ID sempre inclui workspace e dono", async () => {
-    findFirst.mockResolvedValue(row);
+    mocks.findFirst.mockResolvedValue(row);
     await getOwnedProviderConnection("connection-1");
-    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         id: "connection-1",
         workspaceId: "ws-owned",
@@ -73,15 +77,15 @@ describe("provider connection ownership", () => {
   });
 
   it("mutação por ID inclui workspace e dono no próprio UPDATE", async () => {
-    findFirst.mockResolvedValueOnce(row).mockResolvedValueOnce({ ...row, authStatus: "connecting" });
-    updateMany.mockResolvedValue({ count: 1 });
+    mocks.findFirst.mockResolvedValueOnce(row).mockResolvedValueOnce({ ...row, authStatus: "connecting" });
+    mocks.updateMany.mockResolvedValue({ count: 1 });
 
     await markProviderConnectionAction("connection-1", {
       authStatus: "connecting",
       executorStatus: "online",
     });
 
-    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         id: "connection-1",
         workspaceId: "ws-owned",
@@ -91,12 +95,12 @@ describe("provider connection ownership", () => {
   });
 
   it("não muta quando a conexão não pertence ao escopo atual", async () => {
-    findFirst.mockResolvedValue(null);
+    mocks.findFirst.mockResolvedValue(null);
     const result = await markProviderConnectionAction("foreign-connection", {
       authStatus: "connecting",
       executorStatus: "online",
     });
     expect(result).toBeNull();
-    expect(updateMany).not.toHaveBeenCalled();
+    expect(mocks.updateMany).not.toHaveBeenCalled();
   });
 });
