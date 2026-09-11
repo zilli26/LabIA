@@ -2,6 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db/prisma";
 import { ensureDefaultWorkspace } from "@/lib/db/flows";
 import { getLocalOwnerId } from "./security";
@@ -19,11 +21,41 @@ import {
 const OPENAI_PROVIDER = "openai";
 const DEFAULT_LABEL = "ChatGPT pessoal";
 
-export async function listOwnedProviderConnections(): Promise<ProviderConnectionDto[]> {
+type OwnedScope = { workspaceId: string; ownerId: string };
+
+async function getOwnedScope(): Promise<OwnedScope> {
   const workspace = await ensureDefaultWorkspace();
-  const ownerId = getLocalOwnerId();
+  return { workspaceId: workspace.id, ownerId: getLocalOwnerId() };
+}
+
+function ownedWhere(connectionId: string, scope: OwnedScope) {
+  return { id: connectionId, workspaceId: scope.workspaceId, ownerId: scope.ownerId };
+}
+
+async function findOwnedRow(connectionId: string, scope: OwnedScope) {
+  return prisma.providerConnection.findFirst({
+    where: ownedWhere(connectionId, scope),
+    include: { capabilities: true },
+  });
+}
+
+async function updateOwnedRow(
+  connectionId: string,
+  scope: OwnedScope,
+  data: Prisma.ProviderConnectionUpdateManyMutationInput,
+) {
+  const result = await prisma.providerConnection.updateMany({
+    where: ownedWhere(connectionId, scope),
+    data,
+  });
+  if (result.count !== 1) return null;
+  return findOwnedRow(connectionId, scope);
+}
+
+export async function listOwnedProviderConnections(): Promise<ProviderConnectionDto[]> {
+  const scope = await getOwnedScope();
   const rows = await prisma.providerConnection.findMany({
-    where: { workspaceId: workspace.id, ownerId },
+    where: scope,
     include: { capabilities: true },
     orderBy: { createdAt: "asc" },
   });
@@ -31,27 +63,21 @@ export async function listOwnedProviderConnections(): Promise<ProviderConnection
 }
 
 export async function getOwnedProviderConnection(connectionId: string) {
-  const workspace = await ensureDefaultWorkspace();
-  const ownerId = getLocalOwnerId();
-  return prisma.providerConnection.findFirst({
-    where: { id: connectionId, workspaceId: workspace.id, ownerId },
-    include: { capabilities: true },
-  });
+  const scope = await getOwnedScope();
+  return findOwnedRow(connectionId, scope);
 }
 
 export async function createOrGetOpenAiConnection() {
-  const workspace = await ensureDefaultWorkspace();
-  const ownerId = getLocalOwnerId();
+  const scope = await getOwnedScope();
   const existing = await prisma.providerConnection.findFirst({
-    where: { workspaceId: workspace.id, ownerId, provider: OPENAI_PROVIDER },
+    where: { ...scope, provider: OPENAI_PROVIDER },
     include: { capabilities: true },
   });
   if (existing) return toDto(existing);
 
   const row = await prisma.providerConnection.create({
     data: {
-      workspaceId: workspace.id,
-      ownerId,
+      ...scope,
       provider: OPENAI_PROVIDER,
       label: DEFAULT_LABEL,
       authMethod: "chatgptDeviceCode",
@@ -77,27 +103,25 @@ export async function updateProviderConnectionFromExecutor(
   status: ExecutorAccountStatus,
   extra?: { authMethod?: string; loginId?: string | null },
 ) {
-  const owned = await getOwnedProviderConnection(connectionId);
+  const scope = await getOwnedScope();
+  const owned = await findOwnedRow(connectionId, scope);
   if (!owned) return null;
-  const row = await prisma.providerConnection.update({
-    where: { id: owned.id },
-    data: {
-      authStatus: status.authStatus,
-      executorStatus: status.executorStatus,
-      accountLabel: status.accountLabel,
-      planType: status.planType,
-      loginExpiresAt: status.loginExpiresAt ? new Date(status.loginExpiresAt) : null,
-      lastCheckedAt: new Date(),
-      lastErrorCode: status.errorCode,
-      lastErrorMessage: status.errorMessage,
-      authMethod: extra?.authMethod ?? owned.authMethod,
-      loginId: extra?.loginId === undefined ? owned.loginId : extra.loginId,
-      connectedAt: status.authStatus === "connected" ? owned.connectedAt ?? new Date() : owned.connectedAt,
-      disconnectedAt: status.authStatus === "disconnected" ? new Date() : owned.disconnectedAt,
-    },
-    include: { capabilities: true },
+
+  const row = await updateOwnedRow(connectionId, scope, {
+    authStatus: status.authStatus,
+    executorStatus: status.executorStatus,
+    accountLabel: status.accountLabel,
+    planType: status.planType,
+    loginExpiresAt: status.loginExpiresAt ? new Date(status.loginExpiresAt) : null,
+    lastCheckedAt: new Date(),
+    lastErrorCode: status.errorCode,
+    lastErrorMessage: status.errorMessage,
+    authMethod: extra?.authMethod ?? owned.authMethod,
+    loginId: extra?.loginId === undefined ? owned.loginId : extra.loginId,
+    connectedAt: status.authStatus === "connected" ? owned.connectedAt ?? new Date() : owned.connectedAt,
+    disconnectedAt: status.authStatus === "disconnected" ? new Date() : owned.disconnectedAt,
   });
-  return toDto(row);
+  return row ? toDto(row) : null;
 }
 
 export async function markProviderConnectionAction(
@@ -112,23 +136,21 @@ export async function markProviderConnectionAction(
     errorMessage?: string | null;
   },
 ) {
-  const owned = await getOwnedProviderConnection(connectionId);
+  const scope = await getOwnedScope();
+  const owned = await findOwnedRow(connectionId, scope);
   if (!owned) return null;
-  const row = await prisma.providerConnection.update({
-    where: { id: owned.id },
-    data: {
-      authStatus: data.authStatus,
-      executorStatus: data.executorStatus,
-      authMethod: data.authMethod ?? owned.authMethod,
-      loginId: data.loginId === undefined ? owned.loginId : data.loginId,
-      loginExpiresAt: data.loginExpiresAt === undefined ? owned.loginExpiresAt : data.loginExpiresAt,
-      lastErrorCode: data.errorCode === undefined ? owned.lastErrorCode : data.errorCode,
-      lastErrorMessage: data.errorMessage === undefined ? owned.lastErrorMessage : data.errorMessage,
-      lastCheckedAt: new Date(),
-    },
-    include: { capabilities: true },
+
+  const row = await updateOwnedRow(connectionId, scope, {
+    authStatus: data.authStatus,
+    executorStatus: data.executorStatus,
+    authMethod: data.authMethod ?? owned.authMethod,
+    loginId: data.loginId === undefined ? owned.loginId : data.loginId,
+    loginExpiresAt: data.loginExpiresAt === undefined ? owned.loginExpiresAt : data.loginExpiresAt,
+    lastErrorCode: data.errorCode === undefined ? owned.lastErrorCode : data.errorCode,
+    lastErrorMessage: data.errorMessage === undefined ? owned.lastErrorMessage : data.errorMessage,
+    lastCheckedAt: new Date(),
   });
-  return toDto(row);
+  return row ? toDto(row) : null;
 }
 
 export async function markExecutorOffline(connectionId: string, message: string) {
