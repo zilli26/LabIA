@@ -46,3 +46,32 @@ ALTER TABLE "provider_connections" ADD CONSTRAINT "provider_connections_workspac
   FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "provider_capabilities" ADD CONSTRAINT "provider_capabilities_connection_id_fkey"
   FOREIGN KEY ("connection_id") REFERENCES "provider_connections"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Estas tabelas contêm referências de sessão e estados de autenticação pessoais.
+-- O1 usa apenas Prisma/server-side; não existe leitura direta legítima pelo client Supabase.
+ALTER TABLE "provider_connections" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "provider_connections" FORCE ROW LEVEL SECURITY;
+ALTER TABLE "provider_capabilities" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "provider_capabilities" FORCE ROW LEVEL SECURITY;
+
+REVOKE ALL PRIVILEGES ON TABLE "provider_connections" FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON TABLE "provider_capabilities" FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL PRIVILEGES ON TABLE "provider_connections" FROM anon;
+    REVOKE ALL PRIVILEGES ON TABLE "provider_capabilities" FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL PRIVILEGES ON TABLE "provider_connections" FROM authenticated;
+    REVOKE ALL PRIVILEGES ON TABLE "provider_capabilities" FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    REVOKE ALL PRIVILEGES ON TABLE "provider_connections" FROM service_role;
+    REVOKE ALL PRIVILEGES ON TABLE "provider_capabilities" FROM service_role;
+  END IF;
+END
+$$;
+
+-- Nenhuma policy é criada de propósito. A API do Supabase não deve expor estas tabelas.
