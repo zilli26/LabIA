@@ -10,6 +10,18 @@
 - Execução assíncrona: usuário pode sair da página; fluxo continua (pg-boss).
 - Nós de utilidade: entrada de texto, upload, anotação.
 
+### Provider → Conexão → Modelo — contrato aprovado em 2026-09-11
+
+Não existe provider principal do LabIA. Cada nó gerativo deve resolver explicitamente:
+
+1. **Provider** — por exemplo fal.ai, OpenAI ou outro provider implementado;
+2. **Conexão** — credencial/sessão pertencente ao workspace e dono autorizado;
+3. **Modelo** — apenas entre os modelos/capacidades verificadas para aquela conexão.
+
+A fal.ai continua disponível normalmente e os fluxos existentes são preservados. A implementação O1 cria a base `ProviderConnection`/`ProviderCapability` e a conexão ChatGPT local, mas **não troca ainda o runner dos nós existentes** nem habilita geração OpenAI. Conta conectada, capacidade disponível e geração real validada são estados independentes.
+
+A seleção de conexão deve ser persistida no grafo/execução antes de qualquer provider adicional entrar no runner, para que um `FlowRun` continue reproduzível e não dependa de um "default" implícito.
+
 ### Templates de fluxo (E2+) — spec aprovada pelo Felipe em 2026-07-04 (base: P9)
 
 Fluxos pré-moldados onde o usuário SÓ troca as informações. Desenho aprovado:
@@ -19,7 +31,7 @@ Fluxos pré-moldados onde o usuário SÓ troca as informações. Desenho aprovad
 - **Primeira leva (só nós da E2):** visíveis — Post visual simples (~R$0,14), Carrossel de variações (~R$0,81), Reel produto 6s (~R$1,65), Campanha produto mini (~R$4,94), Vídeo contínuo 30s+ (~R$8,24); avançados (fora da galeria default, contra clique curioso caro) — Text2Video rápido 10s (~R$3,78), Premium com áudio nativo Veo 3 (~R$17,28). Trend visual (~R$1,65) na fila. Versões com copy = E3, marcadas como futuras.
 - Biblioteca **curada interna** primeiro; marketplace só depois de validação por uso real.
 
-### Didática do canvas — aprovada pelo Felipe em 2026-07-04 (base: P8, as 10 recomendações)
+### Didática do canvas — aprovada pelo Felipe em 2026-07-04 (base P8, as 10 recomendações)
 
 O canvas ensina a pensar em PROCESSO de produção, não em nós. Requisitos (prioridade da P8):
 
@@ -43,6 +55,8 @@ Nó-agente que recebe briefing (objetivo, produto, referências, duração) e PR
 1. Todo nó declara: entradas tipadas, saídas tipadas, custo estimado. O motor valida conexões por tipo (copy não liga direto em montagem, etc.).
 2. FlowRun é reproduzível: o grafo + params ficam versionados no run.
 3. Um fluxo pode ser executado parcialmente (só um ramo / só um nó).
+4. Nó gerativo não pode depender de provider/conexão implícitos: Provider → Conexão → Modelo faz parte do contrato de execução.
+5. Login de uma conexão não habilita capacidade nem geração real automaticamente.
 
 ## Fora de escopo
 - Nós de terceiros/marketplace (futuro distante) · agendamento de fluxo recorrente (entra com 07-research).
