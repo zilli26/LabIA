@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CircleOff, ExternalLink, LoaderCircle, Plug, RefreshCw, Unplug } from "lucide-react";
+import { CheckCircle2, CircleOff, ExternalLink, LoaderCircle, LockKeyhole, Plug, RefreshCw, Unplug } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { LoginInstruction, ProviderConnectionDto, ProviderConnectionStatus } from "@/lib/provider-connections/types";
 
 type ApiError = { error?: { code?: string; message?: string } };
@@ -18,11 +19,16 @@ const accountLabels: Record<ProviderConnectionStatus, string> = {
   error: "Erro de conexão",
 };
 
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
+async function api<T>(url: string, localToken: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
+    credentials: "same-origin",
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "content-type": "application/json",
+      "x-labia-local-token": localToken,
+      ...(init?.headers ?? {}),
+    },
   });
   const payload = (await response.json().catch(() => ({}))) as T & ApiError;
   if (!response.ok) throw new Error(payload.error?.message || `HTTP ${response.status}`);
@@ -55,13 +61,17 @@ function StateRow({ dataId, label, value, state }: { dataId: string; label: stri
 export function ProviderConnectionsPanel() {
   const [connections, setConnections] = useState<ProviderConnectionDto[]>([]);
   const [loginState, setLoginState] = useState<LoginState>({});
-  const [loading, setLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (token = accessToken) => {
+    if (!token) return;
+    setLoading(true);
     try {
-      const result = await api<{ connections: ProviderConnectionDto[] }>("/api/provider-connections");
+      const result = await api<{ connections: ProviderConnectionDto[] }>("/api/provider-connections", token);
       setConnections(result.connections);
       setError(null);
     } catch (err) {
@@ -69,17 +79,35 @@ export function ProviderConnectionsPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
-  useEffect(() => { void load(); }, [load]);
+  function unlockLocalConnections() {
+    const token = tokenInput.trim();
+    if (!token) {
+      setError("Informe LABIA_LOCAL_CONNECTIONS_TOKEN.");
+      return;
+    }
+    setAccessToken(token);
+    setTokenInput("");
+    setError(null);
+    void load(token);
+  }
+
+  function lockLocalConnections() {
+    setAccessToken("");
+    setConnections([]);
+    setLoginState({});
+    setError(null);
+  }
+
   const hasConnecting = useMemo(() => connections.some((connection) => connection.authStatus === "connecting"), [connections]);
 
   useEffect(() => {
-    if (!hasConnecting) return;
+    if (!hasConnecting || !accessToken) return;
     const timer = window.setInterval(async () => {
       const refreshed = await Promise.all(connections.filter((connection) => connection.authStatus === "connecting").map(async (connection) => {
         try {
-          const result = await api<{ connection: ProviderConnectionDto }>(`/api/provider-connections/${connection.id}/status`);
+          const result = await api<{ connection: ProviderConnectionDto }>(`/api/provider-connections/${connection.id}/status`, accessToken);
           return result.connection;
         } catch {
           return connection;
@@ -88,12 +116,12 @@ export function ProviderConnectionsPanel() {
       setConnections((current) => current.map((connection) => refreshed.find((item) => item.id === connection.id) ?? connection));
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connections, hasConnecting]);
+  }, [accessToken, connections, hasConnecting]);
 
   async function createConnection() {
     setBusyId("create");
     try {
-      const result = await api<{ connection: ProviderConnectionDto }>("/api/provider-connections", { method: "POST", body: "{}" });
+      const result = await api<{ connection: ProviderConnectionDto }>("/api/provider-connections", accessToken, { method: "POST", body: "{}" });
       setConnections((current) => current.some((item) => item.id === result.connection.id) ? current.map((item) => item.id === result.connection.id ? result.connection : item) : [...current, result.connection]);
       setError(null);
     } catch (err) {
@@ -104,7 +132,7 @@ export function ProviderConnectionsPanel() {
   async function startLogin(connection: ProviderConnectionDto, method: "chatgpt" | "chatgptDeviceCode") {
     setBusyId(connection.id);
     try {
-      const result = await api<{ connection: ProviderConnectionDto; instruction: LoginInstruction }>(`/api/provider-connections/${connection.id}/login`, { method: "POST", body: JSON.stringify({ method }) });
+      const result = await api<{ connection: ProviderConnectionDto; instruction: LoginInstruction }>(`/api/provider-connections/${connection.id}/login`, accessToken, { method: "POST", body: JSON.stringify({ method }) });
       setConnections((current) => current.map((item) => item.id === connection.id ? result.connection : item));
       setLoginState((current) => ({ ...current, [connection.id]: result.instruction }));
       setError(null);
@@ -116,7 +144,7 @@ export function ProviderConnectionsPanel() {
   async function connectionAction(connection: ProviderConnectionDto, action: "cancel" | "disconnect") {
     setBusyId(connection.id);
     try {
-      const result = await api<{ connection: ProviderConnectionDto }>(`/api/provider-connections/${connection.id}/${action}`, { method: "POST", body: "{}" });
+      const result = await api<{ connection: ProviderConnectionDto }>(`/api/provider-connections/${connection.id}/${action}`, accessToken, { method: "POST", body: "{}" });
       setConnections((current) => current.map((item) => item.id === connection.id ? result.connection : item));
       setLoginState((current) => ({ ...current, [connection.id]: undefined }));
       setError(null);
@@ -125,13 +153,27 @@ export function ProviderConnectionsPanel() {
     } finally { setBusyId(null); }
   }
 
+  if (!accessToken) {
+    return (
+      <section className="max-w-xl rounded-node border border-lab-border bg-lab-surface-1 p-5" data-id="provider-connections-lock">
+        <div className="flex items-center gap-2"><LockKeyhole className="size-4 text-lab-text-dim" /><h2 className="font-display text-lg font-semibold">Acesso local protegido</h2></div>
+        <p className="mt-2 text-sm text-lab-text-dim">Informe o token local configurado em <span className="font-mono text-lab-text">LABIA_LOCAL_CONNECTIONS_TOKEN</span>. Ele fica apenas na memória desta página e não é salvo pelo navegador.</p>
+        <div className="mt-4 flex gap-2">
+          <Input data-id="local-connections-token" type="password" autoComplete="off" value={tokenInput} onChange={(event) => setTokenInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") unlockLocalConnections(); }} placeholder="Token local" />
+          <Button data-id="local-connections-unlock" onClick={unlockLocalConnections}>Desbloquear</Button>
+        </div>
+        {error ? <div className="mt-3 text-sm text-lab-danger" role="alert">{error}</div> : null}
+      </section>
+    );
+  }
+
   if (loading) return <div className="flex items-center gap-2 text-sm text-lab-text-dim" data-id="connections-loading"><LoaderCircle className="size-4 animate-spin" /> Carregando conexões locais…</div>;
 
   return (
     <section className="space-y-4" data-id="provider-connections-panel">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="font-display text-lg font-semibold">Conexões de provider</h2><p className="mt-1 max-w-2xl text-sm text-lab-text-dim">Autenticação é separada de capacidade e de geração real. Conectar uma conta não libera nenhum nó gerativo.</p></div>
-        <Button onClick={createConnection} disabled={busyId !== null}><Plug /> Adicionar ChatGPT</Button>
+        <div className="flex gap-2"><Button variant="ghost" onClick={lockLocalConnections}><LockKeyhole /> Bloquear</Button><Button onClick={createConnection} disabled={busyId !== null}><Plug /> Adicionar ChatGPT</Button></div>
       </div>
       {error ? <div className="rounded-node border border-lab-danger/50 bg-lab-surface-1 p-3 text-sm text-lab-danger" role="alert">{error}</div> : null}
       {connections.length === 0 ? <div className="rounded-node border border-dashed border-lab-border bg-lab-surface-1 p-6 text-sm text-lab-text-dim">Nenhuma conexão criada neste workspace local.</div> : null}
