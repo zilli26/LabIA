@@ -1,5 +1,65 @@
 # RETOMADA - estado vivo do projeto
 
+
+## O1 — conexão OpenAI/ChatGPT local — 2026-09-11
+
+Felipe aprovou a execução da etapa O1: preparar a conexão da própria conta ChatGPT no LabIA local via Codex App Server, sem geração real, sem consumo de cota, sem gasto de API, sem worker e sem publicação.
+
+**Baseline conferido nesta sessão:** `main` continuava exatamente em `395e3695a585dc2a939553249aec67f4e725506c`. A implementação foi isolada em `feat/o1-openai-oauth`; `main` não foi alterada nem houve merge/deploy.
+
+**Decisão de produto registrada (ADR 0002):** o LabIA não possui provider principal. Cada nó gerativo converge para `Provider → Conexão → Modelo`. fal.ai continua disponível normalmente. Conexão ChatGPT não cria fallback automático para API pública OpenAI paga.
+
+### Implementado em O1
+
+- `ProviderConnection` no Prisma com `workspaceId`, `ownerKey`, `credentialRef` opaco e estados separados de conexão, executor e capacidades;
+- migration aditiva `20260911090000_add_provider_connections`, sem alterar `Flow`, `Generation`, assets ou filas existentes;
+- cliente `codex app-server` por stdio/JSONL, com `initialize/initialized`, `account/read`, `account/login/start`, `account/login/cancel`, `account/logout` e acompanhamento da notificação `account/login/completed` por `loginId`;
+- sessão dedicada por conexão em `LABIA_PROVIDER_DATA_DIR`/`CODEX_HOME`, sem ler/copiar a sessão atual do Codex e removendo chaves OpenAI/Codex herdadas do processo filho;
+- ciclo iniciar/status/cancelar/expirar/desconectar/reconectar separado do runner/worker de geração;
+- APIs locais protegidas por feature flag + loopback e explicitamente desabilitadas em Vercel;
+- página `/conexoes` conforme `docs/DESIGN-SYSTEM.md`, mostrando separadamente `Conta ChatGPT`, `Capacidade de imagem` e `Geração real`;
+- `AGENTS.md`, `CLAUDE.md`, arquitetura, mapa de providers e módulos Imagens/Fluxos atualizados para a regra `Provider → Conexão → Modelo` preservando o histórico legado da fal.ai.
+
+### Validação nova desta sessão
+
+GitHub Actions run `34616487976`, sem credenciais de provider e sem geração:
+
+- Prisma client: success;
+- typecheck: success;
+- lint: success;
+- Vitest: success, incluindo processo falso do App Server, browser/device-code, cancel/logout, timeout/process error/exit/JSON inválido, isolamento de `CODEX_HOME`, gate local, DOM e boundary contra workers/jobs;
+- build Next.js: success.
+
+O primeiro run de CI falhou apenas em tipagem; os erros foram corrigidos antes do run verde acima. Isso é validação simulada/estrutural, não login real.
+
+### Não executado / não declarar como validado
+
+- migration não foi aplicada ao Supabase/produção por esta sessão;
+- `codex app-server` real não foi iniciado neste ambiente remoto;
+- login ChatGPT real ainda não ocorreu;
+- capacidade de imagem da conta continua **não verificada**;
+- geração OpenAI real continua **não validada**;
+- nenhum worker de geração foi iniciado;
+- nenhum job/flow existente foi consumido ou executado;
+- nenhuma geração, cota ou API paga foi usada;
+- nenhuma publicação, merge em `main` ou deploy de produção foi feito.
+
+### Evidência da sessão anterior — não revalidada agora
+
+Felipe informou como estado já verificado na sessão anterior: Vercel/produção validada, Supabase `ACTIVE_HEALTHY`, as três migrations então existentes e Storage/bucket `assets` validados; auditoria encontrou zero jobs `queued/ready/active` e nenhuma geração antiga aguardando worker; existe no banco o fluxo `Teste manual — Imagem → Vídeo` (`Prompt → Gerar Imagem → Gerar Vídeo → Saída`). Esses pontos **não foram consultados novamente nesta O1**. O registro antigo abaixo que fala em Supabase `INACTIVE` é histórico e foi superado pela verificação da sessão anterior, não por uma nova checagem deste bloco.
+
+### Próxima ação — interação do Felipe necessária
+
+1. usar a branch `feat/o1-openai-oauth` localmente;
+2. aplicar a migration O1 somente no banco escolhido para o teste local/desenvolvimento;
+3. configurar `.env.local` com `LABIA_LOCAL_OPENAI_OAUTH_ENABLED=true`, `LABIA_CODEX_BIN=codex` (ou caminho explícito) e, opcionalmente, `LABIA_PROVIDER_DATA_DIR`; manter `DEFAULT_PROVIDER_OWNER_KEY=local-user` enquanto não existir membership;
+4. iniciar somente `npm run dev` — **não iniciar `npm run worker`**;
+5. abrir `http://localhost:3000/conexoes` e clicar `Conectar ChatGPT` (device code) ou `Login no navegador`;
+6. concluir a autenticação. Resultado esperado neste ponto: `Conta ChatGPT = Conectada`, `Capacidade de imagem = Não verificada`, `Geração real = Não validada`.
+
+Depois do login, a próxima etapa deve verificar capacidades separadamente antes de qualquer geração. O débito de retry pós-submit dos workers continua bloqueador antes de validar geração real por uma nova conexão.
+
+
 ## Publicação do projeto no GitHub — 2026-09-10
 
 Felipe solicitou enviar o projeto para o GitHub após conectar o LabIA à Vercel, para continuar pelo ChatGPT.
