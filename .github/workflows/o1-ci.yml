@@ -1,0 +1,32 @@
+name: O1 CI
+
+on:
+  push:
+    branches: ["feat/o1-openai-chatgpt-connection"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma validate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+          DIRECT_URL: postgresql://postgres:password@localhost:5432/postgres
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npx vitest run
+      - run: npm run build
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+          DIRECT_URL: postgresql://postgres:password@localhost:5432/postgres
