@@ -54,6 +54,13 @@ export class ProviderExecutorManager {
     if (session.attempt && !session.attempt.terminalStatus) {
       await session.client.cancelLogin(session.attempt.loginId).catch(() => undefined);
     }
+
+    // Uma conta antiga persistida no CODEX_HOME nunca pode satisfazer a nova tentativa.
+    const cached = accountSnapshot(await session.client.readAccount());
+    if (cached.connected) {
+      await session.client.logout();
+    }
+
     const response = await session.client.startLogin(method);
     const expiresAt = this.now() + this.loginTtlMs;
     const instruction = response.type === "chatgpt"
@@ -72,38 +79,64 @@ export class ProviderExecutorManager {
     };
   }
 
-  async status(sessionRef: string): Promise<ExecutorAccountStatus> {
+  async status(sessionRef: string, expectedLoginId?: string | null): Promise<ExecutorAccountStatus> {
     const session = this.getOrCreateSession(sessionRef);
     await this.expireAttemptIfNeeded(session);
     try {
       const response = await session.client.readAccount();
       const snapshot = accountSnapshot(response);
-      const completion = session.attempt ? session.client.getLoginCompletion(session.attempt.loginId) : null;
-      let authStatus: ProviderConnectionStatus = snapshot.connected
-        ? "connected"
-        : session.attempt && !session.attempt.terminalStatus
-          ? "connecting"
-          : session.attempt?.terminalStatus === "expired"
-            ? "expired"
-            : session.attempt?.terminalStatus === "failed"
-              ? "error"
-              : "disconnected";
-      let errorMessage: string | null = null;
-      if (completion && !completion.success) {
-        authStatus = session.attempt?.terminalStatus === "expired" ? "expired" : "error";
-        errorMessage = completion.error ? sanitizeProviderMessage(completion.error) : null;
-        if (session.attempt && !session.attempt.terminalStatus) session.attempt.terminalStatus = "failed";
+      const attempt = session.attempt;
+
+      if (expectedLoginId && (!attempt || attempt.loginId !== expectedLoginId)) {
+        return {
+          authStatus: "error",
+          executorStatus: "online",
+          accountLabel: null,
+          planType: null,
+          loginExpiresAt: null,
+          errorCode: "login_attempt_not_active",
+          errorMessage: "A tentativa de login atual não está mais ativa no executor. Inicie a conexão novamente.",
+        };
       }
-      if (snapshot.connected && session.attempt) session.attempt = null;
+
+      const completion = attempt ? session.client.getLoginCompletion(attempt.loginId) : null;
+      let authStatus: ProviderConnectionStatus;
+      let errorMessage: string | null = null;
+      let errorCode: string | null = null;
+
+      if (attempt && !attempt.terminalStatus) {
+        if (!completion) {
+          authStatus = "connecting";
+        } else if (!completion.success) {
+          attempt.terminalStatus = "failed";
+          authStatus = "error";
+          errorCode = "login_failed";
+          errorMessage = completion.error ? sanitizeProviderMessage(completion.error) : "O login atual falhou.";
+        } else if (!snapshot.connected) {
+          // O evento da tentativa atual chegou, mas account/read ainda não refletiu a conta.
+          authStatus = "connecting";
+        } else {
+          authStatus = "connected";
+          session.attempt = null;
+        }
+      } else if (attempt?.terminalStatus === "expired") {
+        authStatus = "expired";
+      } else if (attempt?.terminalStatus === "failed") {
+        authStatus = "error";
+        errorCode = "login_failed";
+      } else {
+        authStatus = snapshot.connected ? "connected" : "disconnected";
+      }
+
       return {
         authStatus,
         executorStatus: "online",
-        accountLabel: snapshot.accountLabel,
-        planType: snapshot.planType,
+        accountLabel: authStatus === "connected" ? snapshot.accountLabel : null,
+        planType: authStatus === "connected" ? snapshot.planType : null,
         loginExpiresAt: session.attempt && !session.attempt.terminalStatus
           ? new Date(session.attempt.expiresAt).toISOString()
           : null,
-        errorCode: errorMessage ? "login_failed" : null,
+        errorCode,
         errorMessage,
       };
     } catch (error) {
@@ -131,21 +164,33 @@ export class ProviderExecutorManager {
 
   async logout(sessionRef: string) {
     const session = this.getOrCreateSession(sessionRef);
-    if (session.attempt && !session.attempt.terminalStatus) {
-      await session.client.cancelLogin(session.attempt.loginId).catch(() => undefined);
+    let remoteLogoutError: unknown = null;
+    try {
+      if (session.attempt && !session.attempt.terminalStatus) {
+        await session.client.cancelLogin(session.attempt.loginId).catch(() => undefined);
+      }
+      await session.client.logout();
+    } catch (error) {
+      remoteLogoutError = error;
+    } finally {
+      session.attempt = null;
+      session.client.close();
+      this.sessions.delete(sessionRef);
     }
-    await session.client.logout();
-    session.attempt = null;
-    session.client.close();
-    this.sessions.delete(sessionRef);
+
+    // Mesmo se a revogação remota falhar, o LabIA não mantém uma credencial reutilizável localmente.
+    await session.client.clearDedicatedHome();
+
     return {
       authStatus: "disconnected",
       executorStatus: "online",
       accountLabel: null,
       planType: null,
       loginExpiresAt: null,
-      errorCode: null,
-      errorMessage: null,
+      errorCode: remoteLogoutError ? "remote_logout_unconfirmed" : null,
+      errorMessage: remoteLogoutError
+        ? `Credencial local removida; logout remoto não confirmado: ${sanitizeProviderMessage(remoteLogoutError)}`
+        : null,
     } satisfies ExecutorAccountStatus;
   }
 
@@ -232,7 +277,13 @@ export function createProviderExecutorServer(options?: { token?: string; manager
       if (!isValidSessionRef(sessionRef)) {
         return sendJson(res, 400, { error: { code: "invalid_session_ref", message: "Referência inválida." } });
       }
-      if (action === "status" && req.method === "GET") return sendJson(res, 200, await manager.status(sessionRef));
+      if (action === "status" && req.method === "GET") {
+        const expectedLoginId = url.searchParams.get("expectedLoginId");
+        if (expectedLoginId && expectedLoginId.length > 256) {
+          return sendJson(res, 400, { error: { code: "invalid_login_id", message: "loginId inválido." } });
+        }
+        return sendJson(res, 200, await manager.status(sessionRef, expectedLoginId));
+      }
       if (req.method !== "POST") return sendJson(res, 405, { error: { code: "method_not_allowed", message: "Método inválido." } });
       if (action === "start") {
         const body = await readJson(req);
