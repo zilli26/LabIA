@@ -2,10 +2,8 @@ name: O1 Retomada Prepend
 
 on:
   push:
-    branches:
-      - feat/o1-openai-chatgpt-connection
-    paths:
-      - .github/workflows/o1-retomada-prepend.yml
+    branches: ["feat/o1-openai-chatgpt-connection"]
+    paths: [".github/workflows/o1-retomada-prepend.yml"]
 
 permissions:
   contents: write
@@ -14,13 +12,15 @@ jobs:
   prepend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout branch
+        uses: actions/checkout@v4
         with:
           ref: feat/o1-openai-chatgpt-connection
           fetch-depth: 0
-      - name: Prepend O1 handoff without rewriting history
-        shell: python
+      - name: Prepend O1 handoff
+        shell: bash
         run: |
+          python3 <<'PY'
           from pathlib import Path
 
           path = Path("docs/RETOMADA.md")
@@ -33,31 +33,34 @@ jobs:
           if not text.startswith(title):
               raise SystemExit("Título esperado de RETOMADA.md não encontrado")
 
-          section = r'''
+          section = """
 
-## O1 — conexão ChatGPT local corrigida após revisão — 2026-09-11
+          ## O1 — conexão ChatGPT local corrigida após revisão — 2026-09-11
 
-Branch de implementação: `feat/o1-openai-chatgpt-connection`. O `main` permanece em `395e3695a585dc2a939553249aec67f4e725506c`.
+          Branch de implementação: `feat/o1-openai-chatgpt-connection`. O `main` permanece em `395e3695a585dc2a939553249aec67f4e725506c`.
 
-Felipe revisou a primeira implementação de O1 e encontrou seis problemas: proteção local insuficiente; isolamento incompleto por workspace/dono; migration sem RLS/revogação; logout que podia preservar sessão após restart; conclusão de login que podia aceitar conta antiga em cache; e testes DOM fora do CI. Os seis pontos foram corrigidos na branch antes de qualquer login real.
+          Felipe revisou a primeira implementação de O1 e encontrou seis problemas: proteção local insuficiente; isolamento incompleto por workspace/dono; migration sem RLS/revogação; logout que podia preservar sessão após restart; conclusão de login que podia aceitar conta antiga em cache; e testes DOM fora do CI. Os seis pontos foram corrigidos na branch antes de qualquer login real.
 
-**Código implementado/corrigido:**
-- `/api/provider-connections*` exige execução local, `Host`/URL loopback coerentes, mesma origem quando `Origin` existe, ausência de `x-forwarded-host`, `Sec-Fetch-Site` same-origin/none e `LABIA_LOCAL_CONNECTIONS_TOKEN` por header dedicado;
-- consultas e mutações por conexão usam `id + workspaceId + ownerId`, inclusive no próprio `UPDATE`;
-- a migration O1 habilita e força RLS e revoga privilégios de `PUBLIC`, `anon`, `authenticated` e `service_role` nas tabelas de conexão/capacidade, sem policy de acesso direto;
-- logout tenta `account/logout`, fecha o App Server e remove o `CODEX_HOME` dedicado; se o executor estiver indisponível, o Next remove a credencial local e registra `remote_logout_unconfirmed` sem fingir revogação remota;
-- uma tentativa de login só conclui com `account/login/completed` do `loginId` atual + `account/read` conectado; conta antiga em cache e estado perdido após restart não satisfazem a tentativa;
-- `vitest.config.ts` inclui `.test.tsx`; o contrato DOM faz parte da suíte normal.
+          **Código implementado/corrigido:**
+          - `/api/provider-connections*` exige execução local, `Host`/URL loopback coerentes, mesma origem quando `Origin` existe, ausência de `x-forwarded-host`, `Sec-Fetch-Site` same-origin/none e `LABIA_LOCAL_CONNECTIONS_TOKEN` por header dedicado;
+          - consultas e mutações por conexão usam `id + workspaceId + ownerId`, inclusive no próprio `UPDATE`;
+          - a migration O1 habilita e força RLS e revoga privilégios de `PUBLIC`, `anon`, `authenticated` e `service_role` nas tabelas de conexão/capacidade, sem policy de acesso direto;
+          - logout tenta `account/logout`, fecha o App Server e remove o `CODEX_HOME` dedicado; se o executor estiver indisponível, o Next remove a credencial local e registra `remote_logout_unconfirmed` sem fingir revogação remota;
+          - uma tentativa de login só conclui com `account/login/completed` do `loginId` atual + `account/read` conectado; conta antiga em cache e estado perdido após restart não satisfazem a tentativa;
+          - `vitest.config.ts` inclui `.test.tsx`; o contrato DOM faz parte da suíte normal.
 
-**Validação automatizada:** o commit `22a1e2454382ac101978eb776de5752b585157eb` passou no GitHub Actions `O1 CI` (run `34623208901`): Prisma validate, lint, typecheck, 16 arquivos/131 testes verdes — incluindo os testes DOM — e build Next completo. Isso valida código e simulações, não uma conta real.
+          **Validação automatizada:** o commit `22a1e2454382ac101978eb776de5752b585157eb` passou no GitHub Actions `O1 CI` (run `34623208901`): Prisma validate, lint, typecheck, 16 arquivos/131 testes verdes — incluindo os testes DOM — e build Next completo. Isso valida código e simulações, não uma conta real.
 
-**Não executado:** a migration O1 não foi aplicada ao Supabase; login ChatGPT real não foi iniciado; capacidade de imagem continua não verificada; geração real continua não validada; nenhum worker foi iniciado; nenhuma geração, cota, gasto ou publicação ocorreu. O fluxo salvo `Teste manual — Imagem → Vídeo` não foi alterado.
+          **Não executado:** a migration O1 não foi aplicada ao Supabase; login ChatGPT real não foi iniciado; capacidade de imagem continua não verificada; geração real continua não validada; nenhum worker foi iniciado; nenhuma geração, cota, gasto ou publicação ocorreu. O fluxo salvo `Teste manual — Imagem → Vídeo` não foi alterado.
 
-**Próximo ponto:** após revisão final da branch, configurar os dois tokens locais distintos, aplicar a migration O1 no ambiente autorizado, iniciar apenas `npm run dev` + `npm run provider:executor` e Felipe concluir o device-code. Manter `npm run worker` desligado. O aceite de O1 termina em conta conectada, ainda com imagem não verificada e geração real não validada.
-'''
-
+          **Próximo ponto:** após revisão final da branch, configurar os dois tokens locais distintos, aplicar a migration O1 no ambiente autorizado, iniciar apenas `npm run dev` + `npm run provider:executor` e Felipe concluir o device-code. Manter `npm run worker` desligado. O aceite de O1 termina em conta conectada, ainda com imagem não verificada e geração real não validada.
+          """
+          import textwrap
+          section = textwrap.dedent(section)
           path.write_text(title + section + text[len(title):], encoding="utf-8")
+          PY
       - name: Commit RETOMADA update
+        shell: bash
         run: |
           if git diff --quiet -- docs/RETOMADA.md; then
             exit 0
