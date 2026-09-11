@@ -1,0 +1,207 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  CodexAppServerClient,
+  type CodexProcess,
+  type SpawnCodexProcess,
+} from "../../lib/providers/openai-codex/app-server-client";
+
+type DataListener = (chunk: Buffer | string) => void;
+
+class FakeStream {
+  private listeners: DataListener[] = [];
+
+  on(_event: "data", listener: DataListener) {
+    this.listeners.push(listener);
+  }
+
+  emit(value: string) {
+    for (const listener of this.listeners) listener(value);
+  }
+}
+
+class FakeCodexProcess implements CodexProcess {
+  readonly stdout = new FakeStream();
+  readonly stderr = new FakeStream();
+  readonly writes: Record<string, unknown>[] = [];
+  killed = false;
+
+  readonly stdin = {
+    write: (chunk: string) => {
+      const message = JSON.parse(chunk) as Record<string, unknown>;
+      this.writes.push(message);
+      this.handleWrite(message);
+      return true;
+    },
+    end: () => undefined,
+  };
+
+  private exitListeners: Array<(code: number | null, signal: NodeJS.Signals | null) => void> = [];
+  private errorListeners: Array<(error: Error) => void> = [];
+
+  on(event: "exit" | "error", listener: ((...args: never[]) => void) | ((error: Error) => void)) {
+    if (event === "exit") {
+      this.exitListeners.push(listener as (code: number | null, signal: NodeJS.Signals | null) => void);
+    } else {
+      this.errorListeners.push(listener as (error: Error) => void);
+    }
+  }
+
+  kill() {
+    this.killed = true;
+    return true;
+  }
+
+  notifyLogin(loginId: string, success = true) {
+    this.respond({
+      method: "account/login/completed",
+      params: { loginId, success, error: null },
+    });
+  }
+
+  private respond(message: Record<string, unknown>) {
+    this.stdout.emit(`${JSON.stringify(message)}\n`);
+  }
+
+  private handleWrite(message: Record<string, unknown>) {
+    const id = message.id;
+    const method = message.method;
+    if (typeof id !== "number") return;
+
+    if (method === "initialize") {
+      this.respond({ id, result: { userAgent: "fake", codexHome: "fake" } });
+      return;
+    }
+
+    if (method === "account/login/start") {
+      const params = message.params as { type?: string };
+      if (params.type === "chatgpt") {
+        this.respond({
+          id,
+          result: { type: "chatgpt", loginId: "login-browser", authUrl: "https://chatgpt.com/fake" },
+        });
+      } else {
+        this.respond({
+          id,
+          result: {
+            type: "chatgptDeviceCode",
+            loginId: "login-device",
+            verificationUrl: "https://auth.openai.com/codex/device",
+            userCode: "ABCD-1234",
+          },
+        });
+      }
+      return;
+    }
+
+    if (method === "account/read") {
+      this.respond({ id, result: { account: null, requiresOpenaiAuth: true } });
+      return;
+    }
+
+    if (method === "account/login/cancel" || method === "account/logout") {
+      this.respond({ id, result: {} });
+    }
+  }
+}
+
+const tempDirs: string[] = [];
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+});
+
+describe("CodexAppServerClient", () => {
+  it("initializes over JSONL and isolates CODEX_HOME from current Codex/API credentials", async () => {
+    const root = await mkdtemp(join(tmpdir(), "labia-o1-"));
+    tempDirs.push(root);
+    const fake = new FakeCodexProcess();
+    let spawnCall: Parameters<SpawnCodexProcess> | null = null;
+    const spawnProcess: SpawnCodexProcess = (...args) => {
+      spawnCall = args;
+      return fake;
+    };
+
+    const client = new CodexAppServerClient({
+      credentialRef: "codex-123456789abc",
+      spawnProcess,
+      env: {
+        PATH: process.env.PATH,
+        LABIA_CODEX_BIN: "codex-test",
+        LABIA_PROVIDER_DATA_DIR: root,
+        CODEX_HOME: join(root, "existing-codex"),
+        OPENAI_API_KEY: "must-not-leak",
+        CODEX_API_KEY: "must-not-leak-either",
+      },
+    });
+
+    await client.start();
+
+    expect(spawnCall?.[0]).toBe("codex-test");
+    expect(spawnCall?.[1]).toEqual(["app-server"]);
+    const childEnv = spawnCall?.[2].env;
+    expect(childEnv?.CODEX_HOME).toContain("codex-123456789abc");
+    expect(childEnv?.CODEX_HOME).not.toContain("existing-codex");
+    expect(childEnv?.OPENAI_API_KEY).toBeUndefined();
+    expect(childEnv?.CODEX_API_KEY).toBeUndefined();
+    expect(fake.writes[0]).toMatchObject({ method: "initialize" });
+    expect(fake.writes[0]).not.toHaveProperty("jsonrpc");
+    expect(fake.writes[1]).toEqual({ method: "initialized" });
+
+    client.close();
+  });
+
+  it("supports device-code login, completion notification, cancel and logout without generation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "labia-o1-"));
+    tempDirs.push(root);
+    const fake = new FakeCodexProcess();
+    const client = new CodexAppServerClient({
+      credentialRef: "codex-abcdef123456",
+      spawnProcess: () => fake,
+      env: { LABIA_PROVIDER_DATA_DIR: root },
+    });
+
+    await client.start();
+    const login = await client.startLogin("chatgptDeviceCode");
+    expect(login).toMatchObject({
+      type: "chatgptDeviceCode",
+      loginId: "login-device",
+      userCode: "ABCD-1234",
+    });
+
+    const completionPromise = client.waitForLogin("login-device", 500);
+    fake.notifyLogin("other-login", true);
+    fake.notifyLogin("login-device", true);
+    await expect(completionPromise).resolves.toMatchObject({
+      loginId: "login-device",
+      success: true,
+    });
+
+    await client.cancelLogin("login-device");
+    await client.logout();
+
+    expect(fake.writes.map((message) => message.method)).toContain("account/login/cancel");
+    expect(fake.writes.map((message) => message.method)).toContain("account/logout");
+    expect(fake.writes.map((message) => message.method)).not.toContain("thread/start");
+    expect(fake.writes.map((message) => message.method)).not.toContain("turn/start");
+
+    client.close();
+  });
+
+  it("times out a login wait without exposing provider payloads", async () => {
+    const root = await mkdtemp(join(tmpdir(), "labia-o1-"));
+    tempDirs.push(root);
+    const fake = new FakeCodexProcess();
+    const client = new CodexAppServerClient({
+      credentialRef: "codex-timeout123456",
+      spawnProcess: () => fake,
+      env: { LABIA_PROVIDER_DATA_DIR: root },
+    });
+
+    await client.start();
+    await expect(client.waitForLogin("never", 5)).rejects.toThrow("did not complete");
+    client.close();
+  });
+});
