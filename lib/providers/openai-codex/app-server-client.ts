@@ -4,6 +4,7 @@ import {
   buildCodexChildEnv,
   ensureConnectionCodexHome,
   getCodexBinary,
+  type EnvMap,
 } from "@/lib/providers/openai-codex/environment";
 
 type DataListener = (chunk: Buffer | string) => void;
@@ -27,7 +28,7 @@ export type SpawnCodexProcess = (
   args: string[],
   options: {
     cwd?: string;
-    env: NodeJS.ProcessEnv;
+    env: EnvMap;
     stdio: ["pipe", "pipe", "pipe"];
     windowsHide: boolean;
     shell: false;
@@ -67,12 +68,9 @@ export type AccountReadResult = {
   account:
     | null
     | {
-        type: "chatgpt";
+        type: string;
         email?: string | null;
         planType?: string | null;
-      }
-    | {
-        type: string;
         [key: string]: unknown;
       };
   requiresOpenaiAuth?: boolean;
@@ -104,7 +102,7 @@ export type CodexAppServerClientOptions = {
   credentialRef: string;
   spawnProcess?: SpawnCodexProcess;
   requestTimeoutMs?: number;
-  env?: NodeJS.ProcessEnv;
+  env?: EnvMap;
 };
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -114,7 +112,7 @@ export class CodexAppServerClient {
   private readonly credentialRef: string;
   private readonly spawnProcess: SpawnCodexProcess;
   private readonly requestTimeoutMs: number;
-  private readonly env: NodeJS.ProcessEnv;
+  private readonly env: EnvMap;
   private process: CodexProcess | null = null;
   private buffer = "";
   private nextId = 1;
