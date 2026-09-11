@@ -16,7 +16,8 @@ export async function GET(
     if (!connection) {
       return NextResponse.json({ error: { code: "not_found", message: "Conexão não encontrada." } }, { status: 404 });
     }
-    const live = await readExecutorConnectionStatus(connection.sessionRef);
+    const expectedLoginId = connection.authStatus === "connecting" ? connection.loginId : null;
+    const live = await readExecutorConnectionStatus(connection.sessionRef, expectedLoginId);
     const updated = await updateProviderConnectionFromExecutor(connection.id, live, {
       loginId: live.authStatus === "connecting" ? connection.loginId : null,
     });
