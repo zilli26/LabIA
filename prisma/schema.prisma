@@ -34,16 +34,48 @@ enum GenerationStatus {
 }
 
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  brands    Brand[]
-  flows     Flow[]
-  flowRuns  FlowRun[]
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  brands              Brand[]
+  flows               Flow[]
+  flowRuns            FlowRun[]
+  providerConnections ProviderConnection[]
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
 
   @@map("workspaces")
+}
+
+model ProviderConnection {
+  id                    String    @id @default(cuid())
+  workspaceId           String    @map("workspace_id")
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerKey              String    @map("owner_key")
+  provider              String
+  authMethod            String    @map("auth_method")
+  credentialRef         String    @unique @map("credential_ref")
+  connectionState       String    @default("disconnected") @map("connection_state")
+  executorState         String    @default("stopped") @map("executor_state")
+  capabilityState       String    @default("unverified") @map("capability_state")
+  capabilities          Json?
+  accountLabel          String?   @map("account_label")
+  pendingLoginId        String?   @map("pending_login_id")
+  pendingLoginType      String?   @map("pending_login_type")
+  pendingLoginExpiresAt DateTime? @map("pending_login_expires_at")
+  connectedAt           DateTime? @map("connected_at")
+  expiresAt             DateTime? @map("expires_at")
+  disconnectedAt        DateTime? @map("disconnected_at")
+  lastCheckedAt         DateTime? @map("last_checked_at")
+  lastErrorCode         String?   @map("last_error_code")
+  lastErrorAt           DateTime? @map("last_error_at")
+  generationValidatedAt DateTime? @map("generation_validated_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId, ownerKey])
+  @@index([provider, connectionState])
+  @@map("provider_connections")
 }
 
 model Brand {
