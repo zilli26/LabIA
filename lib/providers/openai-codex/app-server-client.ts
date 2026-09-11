@@ -1,5 +1,3 @@
-import "server-only";
-
 import { spawn } from "node:child_process";
 
 import {
@@ -17,12 +15,8 @@ export type CodexProcess = {
     write(chunk: string): unknown;
     end?: () => void;
   };
-  stdout: {
-    on(event: "data", listener: DataListener): unknown;
-  };
-  stderr: {
-    on(event: "data", listener: DataListener): unknown;
-  };
+  stdout: { on(event: "data", listener: DataListener): unknown };
+  stderr: { on(event: "data", listener: DataListener): unknown };
   on(event: "exit", listener: ExitListener): unknown;
   on(event: "error", listener: ErrorListener): unknown;
   kill(signal?: NodeJS.Signals): unknown;
@@ -40,13 +34,10 @@ export type SpawnCodexProcess = (
   },
 ) => CodexProcess;
 
-type JsonRpcResponse = {
+type JsonRpcMessage = {
   id?: number | string | null;
   result?: unknown;
-  error?: {
-    code?: number;
-    message?: string;
-  };
+  error?: { code?: number; message?: string };
   method?: string;
   params?: unknown;
 };
@@ -144,9 +135,7 @@ export class CodexAppServerClient {
   }
 
   async start() {
-    if (this.process && !this.closed) {
-      return;
-    }
+    if (this.process && !this.closed) return;
 
     this.closed = false;
     const codexHome = await ensureConnectionCodexHome(
@@ -163,21 +152,15 @@ export class CodexAppServerClient {
     this.process = child;
     child.stdout.on("data", (chunk) => this.consumeStdout(chunk));
     child.stderr.on("data", () => {
-      // Drain stderr so the child cannot block. Never forward raw stderr to UI/logs:
-      // it may contain paths or authentication-adjacent diagnostics.
+      // Drain stderr so the child cannot block. Raw stderr is never forwarded:
+      // it may contain local paths or authentication-adjacent diagnostics.
     });
     child.on("error", () => this.failProcess("executor_start_failed"));
     child.on("exit", () => this.failProcess("executor_exited"));
 
     await this.request("initialize", {
-      clientInfo: {
-        name: "labia",
-        title: "LabIA",
-        version: "0.1.0",
-      },
-      capabilities: {
-        experimentalApi: true,
-      },
+      clientInfo: { name: "labia", title: "LabIA", version: "0.1.0" },
+      capabilities: { experimentalApi: true },
     });
     this.notify("initialized");
   }
@@ -189,14 +172,12 @@ export class CodexAppServerClient {
 
   async startLogin(type: "chatgpt" | "chatgptDeviceCode") {
     const result = await this.request("account/login/start", { type });
-
     if (!isLoginResponse(result)) {
       throw new CodexProtocolError(
         "unexpected_login_response",
         "Codex returned an unexpected login response.",
       );
     }
-
     return result;
   }
 
@@ -205,15 +186,12 @@ export class CodexAppServerClient {
   }
 
   async logout() {
-    await this.request("account/logout", {});
+    await this.request("account/logout");
   }
 
   waitForLogin(loginId: string, timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS) {
     const completed = this.completedLogins.get(loginId);
-
-    if (completed) {
-      return Promise.resolve(completed);
-    }
+    if (completed) return Promise.resolve(completed);
 
     return new Promise<AccountLoginCompleted>((resolve, reject) => {
       const previous = this.loginWaiters.get(loginId);
@@ -242,10 +220,7 @@ export class CodexAppServerClient {
   }
 
   close() {
-    if (!this.process || this.closed) {
-      return;
-    }
-
+    if (!this.process || this.closed) return;
     this.closed = true;
     this.process.stdin.end?.();
     this.process.kill("SIGTERM");
@@ -253,7 +228,7 @@ export class CodexAppServerClient {
     this.rejectAll("executor_closed");
   }
 
-  private request(method: string, params: unknown) {
+  private request(method: string, params?: unknown) {
     if (!this.process || this.closed) {
       return Promise.reject(
         new CodexProtocolError(
@@ -264,7 +239,6 @@ export class CodexAppServerClient {
     }
 
     const id = this.nextId++;
-
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -277,12 +251,12 @@ export class CodexAppServerClient {
       }, this.requestTimeoutMs);
 
       this.pending.set(id, { resolve, reject, timer });
-      this.write({ jsonrpc: "2.0", id, method, params });
+      this.write({ id, method, ...(params === undefined ? {} : { params }) });
     });
   }
 
   private notify(method: string, params?: unknown) {
-    this.write({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) });
+    this.write({ method, ...(params === undefined ? {} : { params }) });
   }
 
   private write(message: Record<string, unknown>) {
@@ -292,7 +266,6 @@ export class CodexAppServerClient {
         "Codex App Server is not running.",
       );
     }
-
     this.process.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
@@ -301,39 +274,30 @@ export class CodexAppServerClient {
 
     while (true) {
       const newlineIndex = this.buffer.indexOf("\n");
-      if (newlineIndex < 0) {
-        return;
-      }
+      if (newlineIndex < 0) return;
 
       const rawLine = this.buffer.slice(0, newlineIndex).trim();
       this.buffer = this.buffer.slice(newlineIndex + 1);
+      if (!rawLine) continue;
 
-      if (!rawLine) {
-        continue;
-      }
-
-      let message: JsonRpcResponse;
+      let message: JsonRpcMessage;
       try {
-        message = JSON.parse(rawLine) as JsonRpcResponse;
+        message = JSON.parse(rawLine) as JsonRpcMessage;
       } catch {
         this.failProcess("invalid_json");
         return;
       }
-
       this.handleMessage(message);
     }
   }
 
-  private handleMessage(message: JsonRpcResponse) {
+  private handleMessage(message: JsonRpcMessage) {
     if (typeof message.id === "number") {
       const pending = this.pending.get(message.id);
-      if (!pending) {
-        return;
-      }
+      if (!pending) return;
 
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
-
       if (message.error) {
         pending.reject(
           new CodexProtocolError(
@@ -343,34 +307,25 @@ export class CodexAppServerClient {
         );
         return;
       }
-
       pending.resolve(message.result);
       return;
     }
 
-    if (message.method === "account/login/completed") {
-      const completion = parseLoginCompleted(message.params);
-      if (!completion) {
-        return;
-      }
+    if (message.method !== "account/login/completed") return;
+    const completion = parseLoginCompleted(message.params);
+    if (!completion) return;
 
-      this.completedLogins.set(completion.loginId, completion);
-      const waiter = this.loginWaiters.get(completion.loginId);
-      if (!waiter) {
-        return;
-      }
+    this.completedLogins.set(completion.loginId, completion);
+    const waiter = this.loginWaiters.get(completion.loginId);
+    if (!waiter) return;
 
-      clearTimeout(waiter.timer);
-      this.loginWaiters.delete(completion.loginId);
-      waiter.resolve(completion);
-    }
+    clearTimeout(waiter.timer);
+    this.loginWaiters.delete(completion.loginId);
+    waiter.resolve(completion);
   }
 
   private failProcess(code: string) {
-    if (this.closed) {
-      return;
-    }
-
+    if (this.closed) return;
     this.closed = true;
     this.process = null;
     this.rejectAll(code);
@@ -397,11 +352,9 @@ export class CodexAppServerClient {
 }
 
 function isLoginResponse(value: unknown): value is LoginResponse {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
+  if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
+
   if (candidate.type === "chatgpt") {
     return (
       typeof candidate.loginId === "string" &&
@@ -421,10 +374,7 @@ function isLoginResponse(value: unknown): value is LoginResponse {
 }
 
 function parseLoginCompleted(value: unknown): AccountLoginCompleted | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
+  if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
   if (
     typeof candidate.loginId !== "string" ||
