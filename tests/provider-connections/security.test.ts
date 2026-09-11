@@ -1,24 +1,66 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { assertLocalConnectionsRequest, LocalConnectionsError, sanitizeProviderMessage } from "@/lib/provider-connections/security";
 
-const previous = process.env.LABIA_LOCAL_CONNECTIONS_ENABLED;
-afterEach(() => {
-  if (previous === undefined) delete process.env.LABIA_LOCAL_CONNECTIONS_ENABLED;
-  else process.env.LABIA_LOCAL_CONNECTIONS_ENABLED = previous;
+const previousEnabled = process.env.LABIA_LOCAL_CONNECTIONS_ENABLED;
+const previousToken = process.env.LABIA_LOCAL_CONNECTIONS_TOKEN;
+const token = "local-review-token-1234567890-abcdefgh";
+
+beforeEach(() => {
+  process.env.LABIA_LOCAL_CONNECTIONS_ENABLED = "true";
+  process.env.LABIA_LOCAL_CONNECTIONS_TOKEN = token;
 });
 
+afterEach(() => {
+  if (previousEnabled === undefined) delete process.env.LABIA_LOCAL_CONNECTIONS_ENABLED;
+  else process.env.LABIA_LOCAL_CONNECTIONS_ENABLED = previousEnabled;
+  if (previousToken === undefined) delete process.env.LABIA_LOCAL_CONNECTIONS_TOKEN;
+  else process.env.LABIA_LOCAL_CONNECTIONS_TOKEN = previousToken;
+});
+
+function localRequest(headers: Record<string, string> = {}) {
+  return new Request("http://localhost:3000/api/provider-connections", {
+    headers: {
+      host: "localhost:3000",
+      origin: "http://localhost:3000",
+      "sec-fetch-site": "same-origin",
+      "x-labia-local-token": token,
+      ...headers,
+    },
+  });
+}
+
 describe("provider connection local access", () => {
-  it("aceita localhost somente quando o gate está habilitado", () => {
-    process.env.LABIA_LOCAL_CONNECTIONS_ENABLED = "true";
-    const request = new Request("http://localhost:3000/api/provider-connections", { headers: { host: "localhost:3000" } });
-    expect(() => assertLocalConnectionsRequest(request)).not.toThrow();
+  it("aceita apenas loopback same-origin com token local", () => {
+    expect(() => assertLocalConnectionsRequest(localRequest())).not.toThrow();
   });
 
-  it("recusa host remoto mesmo com o gate habilitado", () => {
-    process.env.LABIA_LOCAL_CONNECTIONS_ENABLED = "true";
-    const request = new Request("https://labia.example/api/provider-connections", { headers: { host: "labia.example" } });
-    expect(() => assertLocalConnectionsRequest(request)).toThrow(LocalConnectionsError);
+  it("recusa token ausente ou incorreto", () => {
+    expect(() => assertLocalConnectionsRequest(localRequest({ "x-labia-local-token": "wrong-token" }))).toThrow(LocalConnectionsError);
+    const request = new Request("http://localhost:3000/api/provider-connections", {
+      headers: { host: "localhost:3000", origin: "http://localhost:3000" },
+    });
+    expect(() => assertLocalConnectionsRequest(request)).toThrowError(/Token local/);
+  });
+
+  it("recusa outra origem local mesmo conhecendo host e token", () => {
+    expect(() => assertLocalConnectionsRequest(localRequest({ origin: "http://127.0.0.1:4000" }))).toThrowError(/origem/i);
+  });
+
+  it("não confia em x-forwarded-host para transformar host remoto em local", () => {
+    const request = new Request("http://evil.example/api/provider-connections", {
+      headers: {
+        host: "evil.example",
+        "x-forwarded-host": "localhost:3000",
+        origin: "http://evil.example",
+        "x-labia-local-token": token,
+      },
+    });
+    expect(() => assertLocalConnectionsRequest(request)).toThrowError(/LabIA local/);
+  });
+
+  it("recusa x-forwarded-host mesmo numa URL loopback", () => {
+    expect(() => assertLocalConnectionsRequest(localRequest({ "x-forwarded-host": "localhost:3000" }))).toThrowError(/LabIA local/);
   });
 
   it("redige tokens de mensagens de erro", () => {
