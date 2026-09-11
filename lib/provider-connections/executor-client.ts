@@ -45,8 +45,9 @@ export async function startExecutorLogin(
   });
 }
 
-export async function readExecutorConnectionStatus(sessionRef: string) {
-  return executorFetch<ExecutorAccountStatus>(`/connections/${encodeURIComponent(sessionRef)}/status`);
+export async function readExecutorConnectionStatus(sessionRef: string, expectedLoginId?: string | null) {
+  const query = expectedLoginId ? `?expectedLoginId=${encodeURIComponent(expectedLoginId)}` : "";
+  return executorFetch<ExecutorAccountStatus>(`/connections/${encodeURIComponent(sessionRef)}/status${query}`);
 }
 
 export async function cancelExecutorLogin(sessionRef: string) {
