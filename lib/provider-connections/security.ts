@@ -1,4 +1,7 @@
+import { timingSafeEqual } from "node:crypto";
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const LOCAL_TOKEN_HEADER = "x-labia-local-token";
 
 export class LocalConnectionsError extends Error {
   constructor(
@@ -20,6 +23,25 @@ function normalizeHost(value: string) {
   return first.split(":")[0]?.toLowerCase() ?? "";
 }
 
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function getLocalConnectionsToken() {
+  const token = process.env.LABIA_LOCAL_CONNECTIONS_TOKEN?.trim();
+  if (!token || token.length < 32) {
+    throw new LocalConnectionsError(
+      "local_token_not_configured",
+      "Configure LABIA_LOCAL_CONNECTIONS_TOKEN com pelo menos 32 caracteres.",
+      503,
+    );
+  }
+  return token;
+}
+
 export function assertLocalConnectionsRequest(request: Request) {
   if (process.env.LABIA_LOCAL_CONNECTIONS_ENABLED !== "true") {
     throw new LocalConnectionsError(
@@ -29,13 +51,49 @@ export function assertLocalConnectionsRequest(request: Request) {
     );
   }
 
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const host = normalizeHost(forwardedHost ?? request.headers.get("host") ?? "");
-  if (!LOOPBACK_HOSTS.has(host)) {
+  const requestUrl = new URL(request.url);
+  const hostHeader = request.headers.get("host")?.trim() ?? "";
+  const host = normalizeHost(hostHeader);
+  const urlHost = requestUrl.hostname.toLowerCase();
+
+  if (
+    !LOOPBACK_HOSTS.has(host) ||
+    !LOOPBACK_HOSTS.has(urlHost) ||
+    host !== urlHost ||
+    request.headers.has("x-forwarded-host")
+  ) {
     throw new LocalConnectionsError(
       "local_only",
-      "Esta operação só pode ser usada no LabIA local.",
+      "Esta operação só pode ser usada diretamente no LabIA local.",
       403,
+    );
+  }
+
+  const origin = request.headers.get("origin");
+  if (origin && origin !== requestUrl.origin) {
+    throw new LocalConnectionsError(
+      "origin_mismatch",
+      "A origem da requisição não corresponde ao LabIA local.",
+      403,
+    );
+  }
+
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    throw new LocalConnectionsError(
+      "cross_origin_request",
+      "Requisição cross-origin recusada.",
+      403,
+    );
+  }
+
+  const suppliedToken = request.headers.get(LOCAL_TOKEN_HEADER)?.trim() ?? "";
+  const expectedToken = getLocalConnectionsToken();
+  if (!suppliedToken || !safeEqual(suppliedToken, expectedToken)) {
+    throw new LocalConnectionsError(
+      "local_token_invalid",
+      "Token local ausente ou inválido.",
+      401,
     );
   }
 }
