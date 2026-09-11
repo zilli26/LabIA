@@ -10,6 +10,23 @@
 - Execução assíncrona: usuário pode sair da página; fluxo continua (pg-boss).
 - Nós de utilidade: entrada de texto, upload, anotação.
 
+### Seleção de provider por nó — decisão 2026-09-11
+
+Todo nó gerativo converge para uma seleção explícita:
+
+`Provider → Conexão → Modelo`
+
+Não existe provider principal do LabIA (ADR 0002). A seleção faz parte dos parâmetros reproduzíveis do nó/run quando a migração de execução for implementada. O1 cria `ProviderConnection` e a UI de conexão OpenAI/ChatGPT, mas não migra os grafos existentes nem liga essa conexão à geração.
+
+Regras:
+
+- fal.ai continua disponível normalmente;
+- conexão autenticada não implica capacidade do modelo;
+- capacidade precisa ser verificada separadamente;
+- geração real só é considerada validada após execução autorizada e persistida;
+- nenhuma falha de conexão pessoal dispara API paga automaticamente;
+- grafos legados continuam interpretados pelo comportamento atual até migração versionada.
+
 ### Templates de fluxo (E2+) — spec aprovada pelo Felipe em 2026-07-04 (base: P9)
 
 Fluxos pré-moldados onde o usuário SÓ troca as informações. Desenho aprovado:
@@ -37,12 +54,13 @@ O canvas ensina a pensar em PROCESSO de produção, não em nós. Requisitos (pr
 Ordem canônica de produção que fundamenta tudo (P8): briefing → direção criativa → roteiro/copy → referências e prompts visuais → geração de candidatos (barato antes de caro) → curadoria humana → montagem → adaptação por rede → publicação → aprendizado registrado.
 
 ### AI Video Director (E3)
-Nó-agente que recebe briefing (objetivo, produto, referências, duração) e PRODUZE o fluxo: shotlist (beats), prompts por cena com refs nomeadas, escolha de modelo por cena e **estimativa de custo total antes de gerar qualquer coisa**. Origem: spec do vault (`fluxos-video-ia-pipeline.md`) — o elo que falta entre roteiro e geração, onde o Felipe já queimou 2,5M+ tokens sem direção.
+Nó-agente que recebe briefing (objetivo, produto, referências, duração) e PRODUZE o fluxo: shotlist (beats), prompts por cena com refs nomeadas, escolha de `Provider → Conexão → Modelo` por cena e **estimativa de custo total antes de gerar qualquer coisa**. Origem: spec do vault (`fluxos-video-ia-pipeline.md`) — o elo que falta entre roteiro e geração, onde o Felipe já queimou 2,5M+ tokens sem direção.
 
 ## Regras de produto
 1. Todo nó declara: entradas tipadas, saídas tipadas, custo estimado. O motor valida conexões por tipo (copy não liga direto em montagem, etc.).
-2. FlowRun é reproduzível: o grafo + params ficam versionados no run.
+2. FlowRun é reproduzível: o grafo + params ficam versionados no run; depois da migração de providers, a seleção `provider + connectionId + model` também precisa estar no snapshot.
 3. Um fluxo pode ser executado parcialmente (só um ramo / só um nó).
+4. Gestão de conexão/autenticação é independente do worker de geração: conectar conta não enfileira nem libera nós existentes.
 
 ## Fora de escopo
-- Nós de terceiros/marketplace (futuro distante) · agendamento de fluxo recorrente (entra com 07-research).
+- Nós de terceiros/marketplace (futuro distante) · agendamento de fluxo recorrente (entra com 07-research) · migração completa dos nós para ProviderConnection dentro de O1.
