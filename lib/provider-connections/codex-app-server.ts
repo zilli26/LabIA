@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdir, writeFile, chmod } from "node:fs/promises";
+import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import readline from "node:readline";
 
@@ -162,6 +162,10 @@ export class CodexAppServerClient {
   async logout() {
     await this.start();
     await this.requestRaw("account/logout", undefined);
+  }
+
+  async clearDedicatedHome() {
+    await rm(this.homePath, { recursive: true, force: true });
   }
 
   getLoginCompletion(loginId: string) {
