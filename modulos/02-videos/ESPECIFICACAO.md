@@ -3,6 +3,8 @@
 **Etapa:** E2 · **Dor que resolve:** vídeos IA limitados a ~8s; planos caros (Higgsfield/Pika); pipeline manual no Google Flow.
 **Revisada:** 2026-07-03 (sessão de abertura da E2, aprovação Felipe pendente).
 
+> **Adendo aprovado em 2026-09-11 — provider por nó:** não existe provider principal do LabIA. Cada nó gerativo deve resolver **Provider → Conexão → Modelo**. A fal.ai continua disponível normalmente. O caminho E2 abaixo descreve a implementação histórica via fal.ai e continua válido até a etapa de parametrização por conexão. Login de uma conta não prova capability de vídeo nem autoriza geração.
+
 ## Princípio do catálogo
 
 O valor do LabIA é **comparar modelos** (chineses e ocidentais) em preço × qualidade, não escolher um "vencedor" de antemão. Todos os modelos de vídeo viáveis via fal.ai entram no select com preço visível — estar no catálogo custa R$0. O gate de gasto é a aprovação explícita do Felipe antes de QUALQUER geração, nunca a remoção do modelo.
@@ -36,6 +38,12 @@ Não basta o fluxo funcionar: a E2 tem que nos deixar **experts na técnica**. `
 4. Todo clipe intermediário vira Asset (reaproveitável, retry barato).
 5. Falha num clipe do meio: fluxo pausa naquele nó; retry re-executa só ele (clipes anteriores já são Assets, não paga de novo).
 6. **Nenhuma geração real sem aprovação explícita do Felipe, com custo em R$ declarado antes. Aprovação de uma geração não vale para a próxima.**
+7. **Arquitetura aprovada de seleção:** cada nó gerativo terá `Provider → Conexão → Modelo`; capability da conexão precisa ser verificada separadamente do login.
+8. **Fallback de conexão pessoal para API paga não é automático.** Requer nova cotação e autorização explícita.
+
+## O1 — conexão ChatGPT local
+
+O1 implementa apenas autenticação/conexão OpenAI/ChatGPT por executor local separado. Não altera `video.generate`, não adiciona modelo OpenAI de vídeo, não marca capability de vídeo e não executa geração. Referências: `docs/O1-OPENAI-CHATGPT-CONNECTION.md` e `docs/adr/0002-provider-per-node-and-o1-chatgpt-connection.md`.
 
 ## Fora de escopo (documentado, sem sumir)
 

@@ -1,51 +1,71 @@
 # LabIA — Mapa de provedores e conexões
 
-> Mapa vivo: o que cada tipo de nó precisa para funcionar — provedor, chave, custo, status.
+> Mapa vivo: o que cada tipo de nó precisa para funcionar — provedor, conexão, modelo, custo, status.
 > Números vêm de P1/P5/P6 (2026-07-02, câmbio ~R$5,40) e da tarefa 0 do módulo 02 (2026-07-04). NUNCA preencher de memória de IA; só com fonte e data.
-> Atualizado: 2026-07-04.
+> Atualizado: 2026-09-11 para refletir a decisão Provider → Conexão → Modelo. Os preços históricos abaixo continuam com suas datas originais e precisam ser reconfirmados antes de gasto.
 
 ## Como pensar os provedores
 
-**fal.ai não é "uma IA" — é um agregador (gateway).** Uma chave (`FAL_KEY`) dá acesso a dezenas de modelos de imagem e vídeo (FLUX, Nano Banana, Kling, Veo, Wan...), com preço público por output. Por isso ele é o gateway principal (decisão da P1): 1 chave, 1 integração, N modelos. O código já isola isso atrás da interface `ModelProvider` (`lib/providers/`) — trocar ou somar provedor não mexe nos nós do canvas.
+**Decisão vigente desde 2026-09-11: não existe provider principal do LabIA.** Cada nó gerativo escolhe **Provider → Conexão → Modelo**. A decisão anterior da P1 de tratar fal.ai como "gateway principal" fica preservada como histórico de implementação, mas está superada como regra de produto.
 
-| Gateway | Papel | Por quê (P1) |
+**fal.ai não é "uma IA" — é um agregador (gateway).** Uma chave (`FAL_KEY`) dá acesso a dezenas de modelos de imagem e vídeo. Ele continua importante pelo catálogo e o código existente continua funcionando atrás de `ModelProvider`; O1 não remove nem desativa esse caminho.
+
+| Provider/gateway | Papel atual | Observação |
 |---|---|---|
-| **fal.ai** | principal | maior catálogo de vídeo, preço público por output, padrão do mercado de apps de geração |
-| **Replicate** | secundário (a integrar) | modelos abertos; tem o FLUX schnell a US$0.003/img — a imagem mais barata do mapa (~R$0,02) |
-| **EvoLink/OpenRouter** | avaliar na E2 | Seedance 2.0 vídeo a ~US$0.045/s |
+| **fal.ai** | provider/conexão disponível | caminho legado já implementado para imagem/vídeo; não é default global de produto |
+| **OpenAI / ChatGPT pessoal** | conexão O1 | autenticação local implementada; capability de imagem e geração real permanecem não verificadas até testes próprios |
+| **Replicate** | a integrar | modelos abertos; referência histórica de imagem barata da P1 |
+| **EvoLink/OpenRouter** | avaliar | alternativas de acesso a modelos conforme etapa e fonte atualizada |
 
-fal.ai NÃO é o mais barato em tudo: para volume de imagem barata, Replicate (FLUX schnell) ganha por ~8x. A estratégia é: fal.ai pela amplitude, Replicate como nó "barato/volume" quando a E1 fechar.
+A escolha de provider não cria fallback automático. Em especial, uma conexão por assinatura nunca deve cair silenciosamente em API paga; qualquer troca que possa gerar cobrança exige nova estimativa/autorização.
 
-## O que cada nó precisa (nó → chave → custo)
+## O que cada nó precisa (estado legado + direção vigente)
 
-| Nó (canvas) | Etapa | Provedor | Chave (.env.local) | Custo típico | Status |
+Os nós existentes abaixo ainda refletem o caminho já implementado na fal.ai. A migração para Provider → Conexão → Modelo será feita depois da O1, preservando fluxos salvos.
+
+| Nó (canvas) | Etapa | Provider atual | Credencial/conexão atual | Custo típico histórico | Status |
 |---|---|---|---|---|---|
 | Prompt | E1 | — (local) | — | R$0 | ✅ no canvas |
-| Gerar Imagem (FLUX dev) | E1 | fal.ai | `FAL_KEY` | ~R$0,14/img | ✅ no canvas, aguarda saldo |
-| Gerar Imagem (Nano Banana 2) | E1 | fal.ai | `FAL_KEY` | ~R$0,43/img | ✅ no canvas, aguarda saldo |
+| Gerar Imagem (FLUX dev) | E1 | fal.ai | `FAL_KEY` | ~R$0,14/img | ✅ caminho legado no canvas |
+| Gerar Imagem (Nano Banana 2) | E1 | fal.ai | `FAL_KEY` | ~R$0,43/img | ✅ caminho legado no canvas |
 | Comparar / Referência (img2img) | E1 | fal.ai | `FAL_KEY` | por modelo | ⏳ tarefa 6 |
 | Imagem barata/volume (FLUX schnell) | pós-E1 | Replicate | `REPLICATE_API_TOKEN` (futura) | ~R$0,02/img | 📋 backlog |
-| img2video/txt2video (Wan 2.5 Preview) | E2 | fal.ai | `FAL_KEY` | US$0,05/s 480p · US$0,10/s 720p · US$0,15/s 1080p (fal.ai, acesso 2026-07-04) | 📋 tarefa 0: catalogado; áudio nativo não confirmado, só `audio_url` de entrada |
-| img2video/txt2video (Kling 2.5 Turbo Pro) | E2 | fal.ai | `FAL_KEY` | US$0,35/5s + US$0,07/s adicional; 10s = US$0,70 (fal.ai, acesso 2026-07-04) | 📋 tarefa 0: catalogado; sem áudio nativo no endpoint geral; extend nativo não confirmado na fal.ai |
-| img2video/txt2video (Hailuo 2.3 Standard / MiniMax) | E2 | fal.ai | `FAL_KEY` | US$0,28/6s · US$0,56/10s; variante Pro: US$0,49/geração (fal.ai, acesso 2026-07-04) | 📋 tarefa 0: catalogado; áudio nativo ficou lacuna em doc pública |
-| img2video/txt2video/reference (Seedance 2.0) | E2 | fal.ai | `FAL_KEY` | US$0,3034/s 720p com áudio; fast US$0,2419/s; 1080p US$0,682/s; conflito: página i2v lista US$0,3024/s (fal.ai, acesso 2026-07-04) | 📋 tarefa 0: catalogado; áudio nativo via `generate_audio`; reference-to-video cobre extensão |
-| img2video/txt2video (Veo 3) | E2 | fal.ai | `FAL_KEY` | US$0,20/s sem áudio · US$0,40/s com áudio; conflito no Readme: Standard US$0,50/0,75 e Fast US$0,25/0,40 (fal.ai, acesso 2026-07-04) | 📋 tarefa 0: catalogado; áudio nativo via `generate_audio`; extend nativo não confirmado na fal.ai |
-| Copy / roteiro / gancho | E3 | assinatura (Codex CLI / Claude headless via worker local — padrão Hermes, P6) | OAuth dos planos | ~R$0 (uso pessoal) | 📋 E3; no SaaS vira API |
-| Publicação multi-rede | E5 | decisão pendente (P3: API oficial vs. agregador tipo Zernio) | — | — | 📋 E5 |
+| img2video/txt2video (Wan 2.5 Preview) | E2 | fal.ai | `FAL_KEY` | US$0,05/s 480p · US$0,10/s 720p · US$0,15/s 1080p (fal.ai, acesso 2026-07-04) | catálogo legado |
+| img2video/txt2video (Kling 2.5 Turbo Pro) | E2 | fal.ai | `FAL_KEY` | US$0,35/5s + US$0,07/s adicional; 10s = US$0,70 (fal.ai, acesso 2026-07-04) | catálogo legado |
+| img2video/txt2video (Hailuo 2.3 Standard / MiniMax) | E2 | fal.ai | `FAL_KEY` | US$0,28/6s · US$0,56/10s; variante Pro: US$0,49/geração (fal.ai, acesso 2026-07-04) | catálogo legado |
+| img2video/txt2video/reference (Seedance 2.0) | E2 | fal.ai | `FAL_KEY` | US$0,3034/s 720p com áudio; fast US$0,2419/s; 1080p US$0,682/s; conflito histórico documentado | catálogo legado |
+| img2video/txt2video (Veo 3) | E2 | fal.ai | `FAL_KEY` | US$0,20/s sem áudio · US$0,40/s com áudio; conflito histórico documentado | catálogo legado |
+| Conexão ChatGPT | O1 | OpenAI/ChatGPT | `ProviderConnection` + `CODEX_HOME` dedicado | nenhum gasto gerativo autorizado em O1 | ✅ código de conexão; login real pendente; imagem não verificada |
+| Copy / roteiro / gancho | E3 | a escolher por nó | conexão específica | desconhecido até rota escolhida | 📋 futuro |
+| Publicação multi-rede | E5 | decisão pendente | — | — | 📋 E5 |
 
-Infra (sempre): Supabase (`DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`) + `USD_BRL_RATE`. Tudo documentado em `.env.example`.
+Infra (sempre): Supabase (`DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`) + `USD_BRL_RATE`. Conexões pessoais O1 também usam tokens locais não públicos documentados em `.env.example`.
+
+## Estado da conexão não é capability
+
+Para qualquer `ProviderConnection`, manter separados:
+
+1. **conta conectada** — autenticação/sessão válida;
+2. **capacidade disponível** — recurso específico comprovado naquela conexão;
+3. **geração real validada** — chamada real executada e resultado recuperado em teste autorizado.
+
+O1 pode terminar com a conta ChatGPT conectada e, ainda assim, `image_generation = unverified` e geração real `unvalidated`.
 
 ## Custo de campanha inteira (norte de produto)
 
 O motor já estima o custo de UM fluxo inteiro antes de rodar (`estimateFlowCost` soma nó a nó) e o `CreditLedger` registra o custo real de cada geração desde o dia 1. O que falta para "campanha do começo ao fim" (copy + carrossel + vídeo):
 
-1. Nós de vídeo (E2) e copy (E3) existirem — cada um já nasce com `estimateCost`, é requisito de arquitetura.
-2. Um agregado acima do fluxo (Campanha = N fluxos) somando estimado vs. real — candidato natural de spec para a E4/E5.
+1. resolver Provider → Conexão → Modelo em todos os nós gerativos sem default implícito;
+2. nós de copy/demais módulos existirem com `estimateCost` adequado à conexão escolhida;
+3. um agregado acima do fluxo (Campanha = N fluxos) somando estimado vs. real — candidato natural de spec para a E4/E5.
 
-Referência de hoje (P1): um post com 1 imagem boa + vídeo 30s custa de ~R$4,50 (Wan) a ~R$65 (Veo 3). Carrossel de 6 slides em FLUX dev: ~R$0,85.
+Os valores antigos de P1 continuam úteis como registro histórico, não como orçamento atual. Toda geração futura reconfirma preço/cota antes da autorização.
 
 ## Regras que este mapa obedece
 
+- **Sem provider principal**: Provider → Conexão → Modelo por nó.
+- **Sem fallback pago silencioso**: mudança de rota/cobrança exige nova autorização.
 - **Custo visível** (docs/04): estimativa ANTES, real DEPOIS, em toda geração.
-- **Não comprar GPU** (P7): API vence até ~130k imagens/mês; reavaliar se CreditLedger passar de R$300/mês só de imagem.
+- **Login ≠ capability ≠ geração validada.**
+- **Não comprar GPU** (P7): reavaliar economia com dados reais de uso, não apenas referências antigas.
 - **Grátis é para desenvolver, não operar** (P5).
