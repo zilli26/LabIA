@@ -23,6 +23,19 @@ interface NodeDefinition {
 
 Novos módulos = novos `NodeDefinition` registrados num registry central. O motor não conhece módulos específicos.
 
+## Provider, conexão e modelo
+
+Decisão aprovada em 2026-09-11: não existe provider principal do LabIA. Para nós gerativos, a direção de arquitetura é **Provider → Conexão → Modelo** por nó.
+
+- `ProviderConnection` representa uma conexão autorizada pertencente a workspace/dono e aponta para a credencial/sessão por referência segura.
+- `ProviderCapability` registra o que foi realmente verificado naquela conexão; login sozinho não cria capability.
+- O modelo é escolhido apenas depois do provider e da conexão.
+- fal.ai continua sendo uma conexão/provider válido; não é removida nem transformada em fallback implícito.
+
+A O1 implementa somente a camada de conexão ChatGPT local e seus controles. Os `NodeDefinition` existentes continuam usando o caminho legado de fal.ai até uma etapa posterior adaptar o contrato do runner com compatibilidade para fluxos salvos. Em particular, iniciar login não importa nem aciona as filas de `FlowRun`, imagem ou vídeo.
+
+Quando a seleção por nó for integrada ao runner, o `FlowRun` deverá congelar a conexão/modelo escolhidos junto da revisão do grafo; trocar conexão depois não pode reinterpretar silenciosamente uma execução passada.
+
 ## AI Video Director (nó-agente, E3)
 
 Briefing → LLM (via assinatura ou API, ver P6) → devolve um **fluxo proposto** (JSON de nós/arestas) + shotlist + custo estimado. O usuário revisa/edita o fluxo gerado ANTES de executar — o Director propõe, o humano aprova, o motor executa.
