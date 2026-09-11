@@ -29,6 +29,8 @@ export async function POST(
       authStatus: "connecting",
       executorStatus: "starting",
       authMethod: method,
+      loginId: null,
+      loginExpiresAt: null,
       errorCode: null,
       errorMessage: null,
     });
