@@ -1,4 +1,5 @@
 import type { FlowRun, FlowRunNode, Prisma } from "@prisma/client";
+import { billingModeFromProvider, normalizeBillingMode, type BillingMode } from "@/lib/providers/model-provider";
 
 import { parseStoredFlowGraph } from "@/lib/flows/parse";
 import { getFlowRunRealtimeConfig } from "@/lib/flows/realtime";
@@ -6,6 +7,17 @@ import { getFlowRunRealtimeConfig } from "@/lib/flows/realtime";
 type FlowRunWithNodes = FlowRun & {
   nodes: FlowRunNode[];
 };
+
+function billingModeFromParams(params: Prisma.JsonValue | null): BillingMode {
+  const providerId = params && typeof params === "object" && !Array.isArray(params) && typeof (params as Record<string, unknown>).providerId === "string"
+    ? (params as Record<string, unknown>).providerId as string
+    : "fal";
+  const declaredBillingMode = params && typeof params === "object" && !Array.isArray(params)
+    ? (params as Record<string, unknown>).billingMode
+    : undefined;
+  if (declaredBillingMode !== undefined) return normalizeBillingMode(declaredBillingMode, providerId);
+  return billingModeFromProvider(providerId);
+}
 
 export function serializeFlowRun(run: FlowRunWithNodes) {
   return {
@@ -19,10 +31,12 @@ export function serializeFlowRun(run: FlowRunWithNodes) {
     totalEstimatedCost: {
       usd: decimalToNumber(run.totalEstimatedCostUsd),
       brl: decimalToNumber(run.totalEstimatedCostBrl),
+      billingMode: deriveRunBillingMode(run.nodes),
     },
     totalActualCost: {
       usd: decimalToNumber(run.totalActualCostUsd),
       brl: decimalToNumber(run.totalActualCostBrl),
+      billingMode: deriveRunBillingMode(run.nodes),
     },
     outputs: run.outputs,
     error: run.error,
@@ -48,10 +62,12 @@ export function serializeFlowRun(run: FlowRunWithNodes) {
         estimatedCost: {
           usd: decimalToNumber(node.estimatedCostUsd),
           brl: decimalToNumber(node.estimatedCostBrl),
+          billingMode: billingModeFromParams(node.params),
         },
         actualCost: {
           usd: decimalToNumber(node.actualCostUsd),
           brl: decimalToNumber(node.actualCostBrl),
+          billingMode: billingModeFromParams(node.params),
         },
         startedAt: node.startedAt?.toISOString() ?? null,
         completedAt: node.completedAt?.toISOString() ?? null,
@@ -60,6 +76,13 @@ export function serializeFlowRun(run: FlowRunWithNodes) {
       })),
     realtime: getFlowRunRealtimeConfig(run.id),
   };
+}
+
+function deriveRunBillingMode(nodes: FlowRunNode[]): BillingMode {
+  const modes = [...new Set(nodes
+    .filter((node) => Number(node.estimatedCostUsd.toString()) !== 0 || Number(node.actualCostUsd.toString()) !== 0)
+    .map((node) => billingModeFromParams(node.params)))];
+  return modes.length === 1 ? modes[0] : "local";
 }
 
 function decimalToNumber(value: Prisma.Decimal) {

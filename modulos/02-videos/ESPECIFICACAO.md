@@ -1,5 +1,9 @@
 # 02-Vídeos — Especificação
 
+## Adendo interoperabilidade — 2026-09-13, O2 preservado e O3 oficial implementado para imagem
+
+O [contrato de providers por nó](../../docs/OAUTH-OPENAI-ESPECIFICACAO.md) acrescenta Provider/Conexão/Modelo aos nós gerativos, Assets vindos de qualquer provider, resolução dinâmica e proteção contra submit duplicado. Montagem continua processamento LabIA. Seedance via fal.ai é modelo dessa conexão; integração Seedance direta será identificada e validada separadamente. Detalhes técnicos aguardam aprovação; a autorização anterior da E2 permanece restrita ao contrato anterior.
+
 **Etapa:** E2 · **Dor que resolve:** vídeos IA limitados a ~8s; planos caros (Higgsfield/Pika); pipeline manual no Google Flow.
 **Revisada:** 2026-07-03 (sessão de abertura da E2, aprovação Felipe pendente).
 

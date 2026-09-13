@@ -1,4 +1,4 @@
-import type { CostEstimate } from "@/lib/providers/model-provider";
+import type { CostEstimate, ModelProvider } from "@/lib/providers/model-provider";
 
 export type PortValueType = "text" | "image" | "video" | "copy" | "brand" | "any";
 
@@ -14,6 +14,7 @@ export type NodeCostContext = {
   nodeId: string;
   params: Record<string, unknown>;
   inputs: Record<string, unknown>;
+  resolveProvider?: (input: { providerId: string; connectionId?: string }) => ModelProvider | Promise<ModelProvider>;
 };
 
 export type NodeExecutionContext = NodeCostContext & {
@@ -82,4 +83,5 @@ export const zeroCost: CostEstimate = {
   usdBrlRate: 0,
   lineItems: [],
   source: "flow",
+  billingMode: "local",
 };

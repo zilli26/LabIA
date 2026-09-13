@@ -1,5 +1,34 @@
 # 03-Fluxos — Especificação (a espinha dorsal)
 
+## Adendo providers por nó — 2026-09-13, O2 preservado e O3 oficial implementado para imagem
+
+Decisão recebida do Felipe: não existe provider principal; cada nó gerativo escolhe Provider/Conexão/Modelo. O [contrato proposto](../../docs/OAUTH-OPENAI-ESPECIFICACAO.md) define resolução por workspace, snapshot de execução, conclusão após Asset persistido, custo API separado de cota, anti-submit duplicado e retry seletivo. A ADR 0002 registra o porquê. Detalhes técnicos deste adendo aguardam aprovação.
+
+## Adendo entrada guiada — 2026-09-11, aprovado
+
+O primeiro acesso à criação é a rota `/criar`, com o título exato **O que você quer criar?**. A jornada é guiada e não abre o canvas automaticamente.
+
+### Escopo deste incremento
+
+- Exibir três opções acessíveis: **Imagem**, **Vídeo curto** e **Vídeo 30s+**.
+- Somente **Imagem** é selecionável neste incremento. **Vídeo curto** e **Vídeo 30s+** ficam visíveis com estado `Em preparação`.
+- Após selecionar Imagem, exibir intenção, formato, modo e resumo; as etapas didáticas ficam visíveis.
+- Usar layout com painel compacto de configuração à esquerda e etapas didáticas + preview ao centro/direita.
+- O modo guiado permanece nessa visão simples de etapas, status e preview. **Editar no canvas** é ação secundária para editar ou investigar; o canvas segue como espinha dorsal interna da receita e da execução.
+- O custo aparece como **A calcular** enquanto desconhecido, nunca como R$ 0. A execução fica bloqueada neste incremento.
+- Erros de interação ou validação preservam os campos já preenchidos do formulário.
+
+### Limites deste incremento
+
+Não simular upload, referência, custo, provider ou geração. Não iniciar gasto, worker, migration, OAuth, login ou deploy.
+
+### Critérios DOM
+
+- `h1` com o texto exato `O que você quer criar?`.
+- Três opções acessíveis, com Imagem selecionável e as duas opções de vídeo em preparação.
+- Selecionar Imagem mostra intenção, formato, modo, resumo e etapas didáticas.
+- Custo `A calcular`, execução bloqueada e preservação do formulário em caso de erro.
+
 **Etapa:** E1 (fundação) e evolui em todas · **Dor que resolve:** pipeline fragmentado em 5+ ferramentas; falta de "AI Video Director"; retrabalho e queima de tokens sem direção.
 
 ## O que terá
@@ -15,7 +44,7 @@
 Fluxos pré-moldados onde o usuário SÓ troca as informações. Desenho aprovado:
 
 - **`FlowTemplate` versionado** (tabela própria, não `Flow.isTemplate`): `slug@version`, grafo JSON, **manifest de placeholders declarados** (key, label, type, required, mapsTo → campos dos nós), preview, custo estimado de exemplo. Seeds versionados no repo + seed script. `Flow.isTemplate` vira compatibilidade/protótipo.
-- **UX de instanciar:** `Novo fluxo` → `Em branco` ou `A partir de template` → galeria (busca, categorias, cards com preview, custo típico e badges Barato/Vídeo/Produto/30s+/Premium) → wizard curto das variáveis obrigatórias → **custo estimado em R$ detalhado por nó ANTES de criar/rodar** → canvas abre montado com pendências destacadas.
+- **UX de instanciar:** `Novo fluxo` abre `/criar` → jornada guiada com opções `Imagem`, `Vídeo curto` e `Vídeo 30s+` → `Em branco` ou `A partir de template` quando esse caminho estiver disponível → galeria (busca, categorias, cards com preview, custo típico e badges Barato/Vídeo/Produto/30s+/Premium) → wizard curto das variáveis obrigatórias → **custo estimado em R$ detalhado por nó ANTES de criar/rodar** → visão guiada com pendências destacadas e ação secundária `Editar no canvas`.
 - **Primeira leva (só nós da E2):** visíveis — Post visual simples (~R$0,14), Carrossel de variações (~R$0,81), Reel produto 6s (~R$1,65), Campanha produto mini (~R$4,94), Vídeo contínuo 30s+ (~R$8,24); avançados (fora da galeria default, contra clique curioso caro) — Text2Video rápido 10s (~R$3,78), Premium com áudio nativo Veo 3 (~R$17,28). Trend visual (~R$1,65) na fila. Versões com copy = E3, marcadas como futuras.
 - Biblioteca **curada interna** primeiro; marketplace só depois de validação por uso real.
 
@@ -23,7 +52,7 @@ Fluxos pré-moldados onde o usuário SÓ troca as informações. Desenho aprovad
 
 O canvas ensina a pensar em PROCESSO de produção, não em nós. Requisitos (prioridade da P8):
 
-1. Novo fluxo nunca abre vazio por padrão: chooser com "Começar do zero" + receitas.
+1. Novo fluxo abre em `/criar`, nunca diretamente em canvas vazio: jornada guiada com chooser de receitas; o canvas é acessado pela ação secundária `Editar no canvas` ou para investigação.
 2. Próximo nó sugerido por porta: arrastar de uma saída para o vazio abre picker filtrado por compatibilidade (padrão Magnific Spotlight).
 3. Fases visuais leves no canvas (Briefing, Direção, Produção, Revisão, Montagem, Publicação, Aprendizado) — bandas discretas, sem burocracia BPMN.
 4. Nó utilitário **"Revisar/Escolher"** (custo zero): gate humano explícito entre gerações caras.

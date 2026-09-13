@@ -28,7 +28,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   try {
     return NextResponse.json({
-      flowRun: await getFlowRun(runId),
+      flowRun: await getFlowRun(runId, (await context.params).flowId),
     });
   } catch (error) {
     return NextResponse.json(

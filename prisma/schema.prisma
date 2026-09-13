@@ -34,14 +34,15 @@ enum GenerationStatus {
 }
 
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  brands    Brand[]
-  flows     Flow[]
-  flowRuns  FlowRun[]
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  brands              Brand[]
+  flows               Flow[]
+  flowRuns            FlowRun[]
+  providerConnections ProviderConnection[]
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
 
   @@map("workspaces")
 }
@@ -82,10 +83,15 @@ model Generation {
   workspaceId      String           @map("workspace_id")
   brandId          String?          @map("brand_id")
   provider         String
+  connectionId     String?          @map("connection_id")
   model            String
   prompt           String
   params           Json
   status           GenerationStatus @default(QUEUED)
+  operationKey     String           @unique @map("operation_key")
+  submissionState  String           @default("not_submitted") @map("submission_state")
+  billingMode      String           @default("api") @map("billing_mode")
+  currency         String           @default("BRL")
   estimatedCostUsd Decimal          @map("estimated_cost_usd") @db.Decimal(12, 6)
   estimatedCostBrl Decimal          @map("estimated_cost_brl") @db.Decimal(12, 4)
   actualCostUsd    Decimal?         @map("actual_cost_usd") @db.Decimal(12, 6)
@@ -115,6 +121,8 @@ model Asset {
   workspaceId   String      @map("workspace_id")
   brandId       String?     @map("brand_id")
   generationId  String?     @map("generation_id")
+  outputIndex   Int         @map("output_index")
+  assetKey      String      @unique @map("asset_key")
   generation    Generation? @relation(fields: [generationId], references: [id], onDelete: SetNull)
   type          AssetType
   origin        AssetOrigin
@@ -136,7 +144,22 @@ model Asset {
   @@index([workspaceId, createdAt])
   @@index([brandId])
   @@index([generationId])
+  @@unique([generationId, outputIndex])
   @@map("assets")
+}
+
+model ExecutionConfirmation {
+  id            String    @id
+  ownerId       String    @map("owner_id")
+  workspaceId   String    @map("workspace_id")
+  flowId        String    @map("flow_id")
+  snapshotHash  String    @map("snapshot_hash")
+  expiresAt     DateTime  @map("expires_at")
+  consumedAt    DateTime? @map("consumed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([ownerId, workspaceId, flowId, expiresAt])
+  @@map("execution_confirmations")
 }
 
 model FlowRun {
@@ -167,29 +190,75 @@ model FlowRun {
 }
 
 model FlowRunNode {
-  id                  String   @id @default(cuid())
-  flowRunId           String   @map("flow_run_id")
-  flowRun             FlowRun  @relation(fields: [flowRunId], references: [id], onDelete: Cascade)
-  nodeId              String   @map("node_id")
-  type                String
-  sequence            Int
-  status              String   @default("waiting")
-  dependencyNodeIds   Json     @map("dependency_node_ids")
-  params              Json?
-  inputs              Json?
-  outputs             Json?
-  error               String?
-  pgBossJobId         String?  @map("pg_boss_job_id")
-  estimatedCostUsd    Decimal  @default(0) @map("estimated_cost_usd") @db.Decimal(12, 6)
-  estimatedCostBrl    Decimal  @default(0) @map("estimated_cost_brl") @db.Decimal(12, 6)
-  actualCostUsd       Decimal  @default(0) @map("actual_cost_usd") @db.Decimal(12, 6)
-  actualCostBrl       Decimal  @default(0) @map("actual_cost_brl") @db.Decimal(12, 6)
-  startedAt           DateTime? @map("started_at")
-  completedAt         DateTime? @map("completed_at")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                String    @id @default(cuid())
+  flowRunId         String    @map("flow_run_id")
+  flowRun           FlowRun   @relation(fields: [flowRunId], references: [id], onDelete: Cascade)
+  nodeId            String    @map("node_id")
+  type              String
+  sequence          Int
+  status            String    @default("waiting")
+  dependencyNodeIds Json      @map("dependency_node_ids")
+  params            Json?
+  inputs            Json?
+  outputs           Json?
+  error             String?
+  pgBossJobId       String?   @map("pg_boss_job_id")
+  estimatedCostUsd  Decimal   @default(0) @map("estimated_cost_usd") @db.Decimal(12, 6)
+  estimatedCostBrl  Decimal   @default(0) @map("estimated_cost_brl") @db.Decimal(12, 6)
+  actualCostUsd     Decimal   @default(0) @map("actual_cost_usd") @db.Decimal(12, 6)
+  actualCostBrl     Decimal   @default(0) @map("actual_cost_brl") @db.Decimal(12, 6)
+  startedAt         DateTime? @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@unique([flowRunId, nodeId])
   @@index([flowRunId, status])
   @@map("flow_run_nodes")
+}
+
+model ProviderConnection {
+  id                         String               @id @default(cuid())
+  workspaceId                String               @map("workspace_id")
+  workspace                  Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerId                    String               @map("owner_id")
+  provider                   String
+  label                      String
+  authMethod                 String               @map("auth_method")
+  sessionRef                 String               @unique @map("session_ref")
+  authStatus                 String               @default("disconnected") @map("auth_status")
+  executorStatus             String               @default("offline") @map("executor_status")
+  generationValidationStatus String               @default("unvalidated") @map("generation_validation_status")
+  accountLabel               String?              @map("account_label")
+  planType                   String?              @map("plan_type")
+  loginId                    String?              @map("login_id")
+  loginExpiresAt             DateTime?            @map("login_expires_at")
+  connectedAt                DateTime?            @map("connected_at")
+  disconnectedAt             DateTime?            @map("disconnected_at")
+  lastCheckedAt              DateTime?            @map("last_checked_at")
+  lastErrorCode              String?              @map("last_error_code")
+  lastErrorMessage           String?              @map("last_error_message")
+  capabilities               ProviderCapability[]
+  createdAt                  DateTime             @default(now()) @map("created_at")
+  updatedAt                  DateTime             @updatedAt @map("updated_at")
+
+  @@index([workspaceId, ownerId])
+  @@index([provider, authStatus])
+  @@map("provider_connections")
+}
+
+model ProviderCapability {
+  id           String             @id @default(cuid())
+  connectionId String             @map("connection_id")
+  connection   ProviderConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  key          String
+  status       String             @default("unverified")
+  evidence     String?
+  verifiedAt   DateTime?          @map("verified_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  @@unique([connectionId, key])
+  @@index([key, status])
+  @@map("provider_capabilities")
 }

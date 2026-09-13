@@ -1,8 +1,8 @@
-import type { NodeDefinition } from "@/lib/flows/types";
+import type { NodeCostContext, NodeDefinition } from "@/lib/flows/types";
 import { zeroCost } from "@/lib/flows/types";
 import { FAL_IMAGE_MODELS } from "@/lib/providers/fal-models";
-import { FalProvider } from "@/lib/providers/fal";
 import type { CostEstimate, GenParams } from "@/lib/providers/model-provider";
+import { resolveModelProvider } from "@/lib/providers/provider-registry";
 
 const DEFAULT_IMAGE_MODEL = "fal-ai/flux/dev";
 
@@ -12,6 +12,14 @@ function getString(value: unknown) {
 
 function getModel(params: Record<string, unknown>) {
   return getString(params.model) ?? DEFAULT_IMAGE_MODEL;
+}
+
+function getProviderId(params: Record<string, unknown>) {
+  return getString(params.providerId) ?? "fal";
+}
+
+function getConnectionId(params: Record<string, unknown>) {
+  return getString(params.connectionId);
 }
 
 function getPromptFromInput(input: unknown) {
@@ -37,15 +45,33 @@ function buildImageParams({
   return {
     ...Object.fromEntries(
       Object.entries(params).filter(
-        ([key]) => !["model", "prompt", "assetUrl", "generationId"].includes(key),
+        ([key]) =>
+          ![
+            "providerId",
+            "connectionId",
+            "model",
+            "prompt",
+            "assetUrl",
+            "generationId",
+            "operationKey",
+          ].includes(key),
       ),
     ),
     prompt,
   };
 }
 
-function estimateImageCost(params: Record<string, unknown>): CostEstimate {
-  const provider = new FalProvider();
+async function estimateImageCost(
+  params: Record<string, unknown>,
+  resolveProvider?: NodeCostContext["resolveProvider"],
+): Promise<CostEstimate> {
+  const provider = resolveProvider
+    ? await resolveProvider({ providerId: getProviderId(params), connectionId: getConnectionId(params) })
+    : resolveModelProvider({
+        providerId: getProviderId(params),
+        connectionId: getConnectionId(params),
+        legacyProvider: "fal",
+      });
   const prompt = getString(params.prompt) ?? "placeholder";
 
   return provider.estimateCost(
@@ -109,7 +135,7 @@ export const imageNodeDefinitions: NodeDefinition[] = [
       },
     ],
     estimateCost(ctx) {
-      return estimateImageCost(ctx.params);
+      return estimateImageCost(ctx.params, ctx.resolveProvider);
     },
     async execute(ctx) {
       const prompt =
@@ -120,6 +146,8 @@ export const imageNodeDefinitions: NodeDefinition[] = [
       }
 
       const model = getModel(ctx.params);
+      const providerId = getProviderId(ctx.params);
+      const connectionId = getConnectionId(ctx.params);
       const generationParams = buildImageParams({
         params: ctx.params,
         prompt,
@@ -129,6 +157,9 @@ export const imageNodeDefinitions: NodeDefinition[] = [
       );
       const queued = await enqueueImageGenerationJob({
         workspaceId: ctx.workspaceId,
+        providerId,
+        connectionId,
+        operationKey: `${ctx.flowRunId}:${ctx.nodeId}`,
         model,
         prompt,
         params: generationParams,
@@ -149,6 +180,8 @@ export const imageNodeDefinitions: NodeDefinition[] = [
           generationId: queued.generationId,
           queueJobId: queued.queueJobId,
           prompt,
+          providerId,
+          connectionId,
           model,
         },
         actualCost: zeroCost,

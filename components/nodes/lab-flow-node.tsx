@@ -547,8 +547,10 @@ export function LabFlowNodeComponent({
   const Icon = meta.Icon;
   const { setNodes } = useReactFlow<LabFlowNode>();
   const params = data.params ?? {};
+  const selectedImageProvider = getString(params.providerId) ?? "fal";
   const selectedImageModel =
-    getString(params.model) ?? imageModelOptions[0]?.id ?? "fal-ai/flux/dev";
+    getString(params.model) ??
+    (selectedImageProvider === "fal" ? imageModelOptions[0]?.id ?? "fal-ai/flux/dev" : "");
   const selectedImageModelInfo =
     imageModelOptions.find((model) => model.id === selectedImageModel) ??
     imageModelOptions[0];
@@ -623,6 +625,60 @@ export function LabFlowNodeComponent({
           <div className="mt-3 space-y-3">
             <label className="block">
               <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
+                provider
+              </span>
+              <select
+                aria-label="Provider de imagem"
+                value={selectedImageProvider}
+                onChange={(event) =>
+                  updateParams(
+                    event.target.value === "fal"
+                      ? { providerId: "fal", connectionId: undefined, model: imageModelOptions[0]?.id }
+                      : { providerId: "openai", connectionId: undefined, model: undefined },
+                  )
+                }
+                className="nodrag nowheel h-9 w-full rounded-control border border-lab-border bg-lab-surface-1 px-2 text-xs text-lab-text outline-none transition-colors focus:border-lab-border-strong"
+              >
+                <option value="fal">fal.ai</option>
+                <option value="openai">OpenAI / ChatGPT</option>
+              </select>
+            </label>
+
+            {selectedImageProvider === "openai" ? (
+              <>
+                <label className="block">
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
+                    conexão ChatGPT
+                  </span>
+                  <input
+                    aria-label="Conexão ChatGPT"
+                    value={getString(params.connectionId) ?? ""}
+                    onChange={(event) => updateParams({ connectionId: event.target.value || undefined })}
+                    placeholder="ID da conexão autenticada"
+                    className="nodrag nowheel h-9 w-full rounded-control border border-lab-border bg-lab-surface-1 px-2 font-mono text-xs text-lab-text outline-none placeholder:text-lab-text-muted focus:border-lab-border-strong"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
+                    modelo homologado
+                  </span>
+                  <input
+                    aria-label="Modelo OpenAI"
+                    value={getString(params.model) ?? ""}
+                    onChange={(event) => updateParams({ model: event.target.value || undefined })}
+                    placeholder="Disponível após contrato de imagem"
+                    className="nodrag nowheel h-9 w-full rounded-control border border-lab-border bg-lab-surface-1 px-2 font-mono text-xs text-lab-text outline-none placeholder:text-lab-text-muted focus:border-lab-border-strong"
+                  />
+                </label>
+                <p className="rounded-control border border-lab-warning/40 bg-lab-surface-1 px-2 py-1.5 text-xs leading-5 text-lab-warning">
+                  Imagem OpenAI aguarda operação recuperável homologada no App Server 0.154.0.
+                </p>
+              </>
+            ) : null}
+
+            {selectedImageProvider === "fal" ? (
+            <label className="block">
+              <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
                 modelo
               </span>
               <select
@@ -638,8 +694,9 @@ export function LabFlowNodeComponent({
                 ))}
               </select>
             </label>
+            ) : null}
 
-            {selectedImageModelInfo ? (
+            {selectedImageProvider === "fal" && selectedImageModelInfo ? (
               <div className="flex items-center justify-between gap-2 rounded-control border border-lab-border bg-lab-surface-1 px-2.5 py-2">
                 <span className="truncate font-mono text-[11px] text-lab-text-dim">
                   {selectedImageModelInfo.name}

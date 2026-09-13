@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { hasDatabaseEnv } from "@/lib/db/env";
@@ -94,6 +95,8 @@ export async function POST(request: Request) {
     });
     const asset = await prisma.asset.create({
       data: {
+        assetKey: `upload:${randomUUID()}`,
+        outputIndex: 0,
         workspaceId: workspace.id,
         generationId: null,
         type: "AUDIO",

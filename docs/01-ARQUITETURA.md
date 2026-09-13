@@ -1,5 +1,7 @@
 # LabIA — Arquitetura
 
+> Decisão de produto de 2026-09-11: **não existe provider principal**. Cada nó escolhe Provider/Conexão/Modelo (ADR 0002). O contrato de OAuth e a evolução de ModelProvider estão propostos em `OAUTH-OPENAI-ESPECIFICACAO.md` e `OAUTH-OPENAI-CONSTRUCAO.md`; implementação ainda pendente. As referências históricas a provider principal, assinatura somente para texto e fallback automático abaixo não orientam a nova integração.
+
 ## Critério das escolhas
 
 Máxima familiaridade para qualquer IA construtora (Codex/Claude), menor atrito no Windows, menor custo fixo possível (free tiers), e nenhuma dependência da qual não se possa sair (abstrações próprias sobre agregadores).
@@ -11,7 +13,7 @@ Máxima familiaridade para qualquer IA construtora (Codex/Claude), menor atrito 
 | Frontend + backend | **Next.js 15 (App Router) + TypeScript** | Stack que os modelos de IA mais conhecem; front e API no mesmo repo |
 | UI | **Tailwind + shadcn/ui customizado** | Base produtiva, mas SEMPRE customizada pelo `DESIGN-SYSTEM.md` |
 | Banco/Auth/Storage | **Supabase (Postgres) + Prisma** | Free tier generoso; auth e storage de assets inclusos; Prisma = schema legível por IA |
-| Geração imagem/vídeo | **fal.ai (principal) + Replicate (secundário)** atrás de `ModelProvider` | Uma API → dezenas de modelos, pay-per-use, preços públicos (validar na pesquisa P1) |
+| Geração imagem/vídeo | **Provider por nó**, atrás de `ModelProvider`; fal.ai implementada, conexões adicionais pendentes | Cada etapa escolhe serviço, conexão e modelo; resultados compartilhados como Asset |
 | Agentes de texto | **Vercel AI SDK** + Anthropic/OpenAI | Streaming, tools e troca de provedor fáceis |
 | Canvas de fluxos | **React Flow (@xyflow/react)** | Padrão de mercado para canvas de nós |
 | Jobs assíncronos | **pg-boss** (fila em Postgres) | Vídeo é assíncrono (30s–5min); evita Redis/infra extra no início |

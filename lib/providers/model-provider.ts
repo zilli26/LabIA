@@ -2,6 +2,29 @@ export type ModelKind = "image" | "video" | "text";
 
 export type PricingUnit = "image" | "megapixel" | "second" | "clip" | "token";
 
+export type BillingMode = "api" | "subscription" | "local";
+
+export function billingModeFromProvider(providerId: string): BillingMode {
+  if (providerId === "openai") return "subscription";
+  if (providerId === "labia/ffmpeg") return "local";
+  if (providerId === "fal") return "api";
+  throw new Error(`Provider desconhecido para billingMode: ${providerId}`);
+}
+
+export function assertBillingMode(value: unknown): BillingMode {
+  if (value === "api" || value === "subscription" || value === "local") return value;
+  throw new Error(`billingMode desconhecido: ${String(value)}`);
+}
+
+export function normalizeBillingMode(value: unknown, providerId: string): BillingMode {
+  const providerMode = billingModeFromProvider(providerId);
+  const billingMode = assertBillingMode(value);
+  if (billingMode !== providerMode) {
+    throw new Error(`billingMode ${billingMode} incompatível com provider ${providerId}`);
+  }
+  return billingMode;
+}
+
 export type CostLineItem = {
   label: string;
   quantity: number;
@@ -16,6 +39,7 @@ export type CostEstimate = {
   usdBrlRate?: number;
   lineItems?: CostLineItem[];
   source?: string;
+  billingMode: BillingMode;
 };
 
 export type ModelInfo = {
@@ -129,9 +153,21 @@ export type GenerationResult = {
   raw: unknown;
 };
 
+export type ProviderCapabilities = {
+  image: boolean;
+  video: boolean;
+  recoverableResults: boolean;
+};
+
 export interface ModelProvider {
   id: string;
+  capabilities?: ProviderCapabilities;
   listModels(kind: ModelKind): ModelInfo[];
   estimateCost(model: string, params: GenParams): CostEstimate;
   generate(model: string, params: GenParams): Promise<JobHandle>;
+  waitForResult(
+    handle: JobHandle,
+    params: GenParams,
+    options?: { pollIntervalMs?: number },
+  ): Promise<GenerationResult>;
 }

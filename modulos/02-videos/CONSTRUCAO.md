@@ -1,5 +1,7 @@
 # 02-Vídeos — Construção
 
+**Status do adendo multi-provider (2026-09-13):** resolução por Provider/Conexão/Modelo e jobs compatíveis com provider explícito foram preservados; fal.ai e a tarefa 8 histórica permanecem preservadas. O3 OpenAI está integrado somente para imagem pelo contrato oficial do App Server 0.154.0; vídeo OpenAI continua explicitamente indisponível. Nenhum teste real de vídeo foi realizado nesta sessão.
+
 **Status:** tarefa 7 implementada e validada por testes + DOM/Prisma sem worker (2026-07-04); nenhuma geração real executada · **Etapa:** E2 · **Depende de:** E1 fechada (canvas, worker unificado, Generation/Asset/CreditLedger, ModelProvider fal.ai).
 
 ## Ordem de tarefas

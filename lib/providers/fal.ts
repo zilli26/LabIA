@@ -127,6 +127,7 @@ function toCostEstimate({
     usdBrlRate,
     lineItems,
     source,
+    billingMode: "api",
   };
 }
 

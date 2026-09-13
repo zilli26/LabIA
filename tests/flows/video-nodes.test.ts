@@ -71,6 +71,7 @@ const estimatedCost = {
   usdBrlRate: 5.4,
   lineItems: [],
   source: "test",
+  billingMode: "api" as const,
 };
 
 function makeContext(

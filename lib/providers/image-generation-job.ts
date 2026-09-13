@@ -1,11 +1,14 @@
-import type { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { PgBoss, type Job } from "pg-boss";
 
 import { prisma } from "../db/prisma";
-import { uploadRemoteAssetToSupabase } from "./asset-storage";
-import { FalProvider } from "./fal";
-import type { GenParams, GeneratedAsset } from "./model-provider";
+import type { GenParams } from "./model-provider";
+import { normalizeBillingMode } from "./model-provider";
 import { getProviderErrorMessage } from "./provider-errors";
+import { resolveServerModelProvider } from "./provider-registry";
+import { getOwnedExecutionScope, assertOwnedExecutionReferences } from "@/lib/flows/ownership";
+import { GenerationCoordinator } from "./generation-coordinator";
+import { findOrCreateGeneration, PrismaGenerationStore } from "./prisma-generation-store";
 
 export const IMAGE_GENERATION_QUEUE = "image.generate";
 
@@ -15,6 +18,9 @@ const DEFAULT_WORKSPACE_SLUG =
 export type EnqueueImageGenerationInput = {
   workspaceId: string;
   brandId?: string;
+  providerId?: string;
+  connectionId?: string;
+  operationKey?: string;
   model: string;
   prompt: string;
   params?: Omit<GenParams, "prompt">;
@@ -34,10 +40,6 @@ function getPgBossConnectionString() {
   }
 
   return connectionString;
-}
-
-function toJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 function buildGenerationParams({
@@ -89,23 +91,7 @@ export async function ensureDefaultImageWorkspace() {
 }
 
 export async function enqueueImageGenerationJob(input: EnqueueImageGenerationInput) {
-  const provider = new FalProvider();
-  const params = buildGenerationParams(input);
-  const estimatedCost = provider.estimateCost(input.model, params);
-  const generation = await prisma.generation.create({
-    data: {
-      workspaceId: input.workspaceId,
-      brandId: input.brandId,
-      provider: provider.id,
-      model: input.model,
-      prompt: input.prompt,
-      params: toJson(params),
-      estimatedCostUsd: estimatedCost.usd,
-      estimatedCostBrl: estimatedCost.brl,
-      flowRunId: input.flowRunId,
-      flowNodeId: input.flowNodeId,
-    },
-  });
+  const { generation, estimatedCost } = await createImageGeneration(input);
   const boss = await createStartedBoss();
 
   try {
@@ -142,62 +128,10 @@ export async function enqueueImageGenerationJob(input: EnqueueImageGenerationInp
   }
 }
 
-async function persistGeneratedImage({
-  generation,
-  image,
-  index,
-}: {
-  generation: {
-    id: string;
-    workspaceId: string;
-    brandId: string | null;
-    prompt: string;
-    provider: string;
-    model: string;
-  };
-  image: GeneratedAsset;
-  index: number;
-}) {
-  const uploaded = await uploadRemoteAssetToSupabase({
-    sourceUrl: image.url,
-    workspaceId: generation.workspaceId,
-    generationId: generation.id,
-    contentType: image.contentType,
-    fileName: image.fileName,
-  });
-
-  return prisma.asset.create({
-    data: {
-      workspaceId: generation.workspaceId,
-      brandId: generation.brandId,
-      generationId: generation.id,
-      type: "IMAGE",
-      origin: "GENERATED",
-      url: uploaded.url,
-      storageBucket: uploaded.bucket,
-      storagePath: uploaded.path,
-      contentType: uploaded.contentType,
-      width: image.width,
-      height: image.height,
-      sizeBytes: uploaded.sizeBytes,
-      prompt: generation.prompt,
-      provider: generation.provider,
-      model: generation.model,
-      metadata: toJson({
-        sourceUrl: image.url,
-        sourceFileName: image.fileName,
-        sourceFileSize: image.fileSize,
-        outputIndex: index,
-      }),
-    },
-  });
-}
-
 export async function processImageGeneration(generationId: string) {
-  const generation = await prisma.generation.findUnique({
-    where: {
-      id: generationId,
-    },
+  const scope = await getOwnedExecutionScope();
+  const generation = await prisma.generation.findFirst({
+    where: { id: generationId, workspaceId: scope.workspaceId },
   });
 
   if (!generation) {
@@ -208,72 +142,48 @@ export async function processImageGeneration(generationId: string) {
     return generation;
   }
 
-  const provider = new FalProvider();
-  const params = {
-    ...(generation.params as Record<string, unknown>),
-    prompt: generation.prompt,
-  } as GenParams;
-
-  await prisma.generation.update({
-    where: {
-      id: generation.id,
-    },
-    data: {
-      status: "RUNNING",
-      startedAt: new Date(),
-      errorMessage: null,
+  await assertOwnedExecutionReferences({
+    ownerId: scope.ownerId,
+    workspaceId: scope.workspaceId,
+    brandId: generation.brandId ?? undefined,
+    flowRunId: generation.flowRunId ?? undefined,
+    flowNodeId: generation.flowNodeId ?? undefined,
+    connectionId: generation.connectionId ?? undefined,
+    providerId: generation.provider,
+    repository: {
+      flow: async (id) => prisma.flow.findFirst({ where: { id, workspaceId: scope.workspaceId }, select: { id: true, workspaceId: true } }),
+      brand: async (id) => prisma.brand.findFirst({ where: { id, workspaceId: scope.workspaceId }, select: { id: true, workspaceId: true } }),
+      flowRun: async (id) => prisma.flowRun.findFirst({ where: { id, workspaceId: scope.workspaceId }, select: { id: true, workspaceId: true, flowId: true } }),
+      flowRunNode: async (flowRunId, nodeId) => prisma.flowRunNode.findFirst({ where: { flowRunId, nodeId }, select: { nodeId: true } }),
+      connection: async (id) => prisma.providerConnection.findFirst({ where: { id, workspaceId: scope.workspaceId, ownerId: scope.ownerId }, select: { id: true, workspaceId: true, ownerId: true, provider: true } }),
     },
   });
 
+  const provider = await resolveServerModelProvider({
+    ownerId: scope.ownerId,
+    workspaceId: scope.workspaceId,
+    providerId: generation.provider,
+    connectionId: generation.connectionId ?? undefined,
+  });
+  const store = new PrismaGenerationStore();
+  const coordinator = new GenerationCoordinator({ store, provider });
   try {
-    const handle = await provider.generate(generation.model, params);
-
-    await prisma.generation.update({
-      where: {
-        id: generation.id,
-      },
-      data: {
-        providerJobId: handle.id,
-      },
+    await coordinator.run({
+      operationKey: generation.operationKey,
+      provider: generation.provider,
+      model: generation.model,
+      params: { ...(generation.params as Record<string, unknown>), prompt: generation.prompt } as GenParams,
+      workspaceId: scope.workspaceId,
+      brandId: generation.brandId ?? undefined,
+      connectionId: generation.connectionId ?? undefined,
+      billingMode: generation.billingMode as "api" | "subscription" | "local",
+      currency: generation.currency,
     });
-
-    const result = await provider.waitForResult(handle, params);
-
-    await Promise.all(
-      result.images.map((image, index) =>
-        persistGeneratedImage({
-          generation,
-          image,
-          index,
-        }),
-      ),
-    );
-
-    return prisma.generation.update({
-      where: {
-        id: generation.id,
-      },
-      data: {
-        status: "DONE",
-        actualCostUsd: result.cost.usd,
-        actualCostBrl: result.cost.brl,
-        result: toJson(result.raw),
-        completedAt: new Date(),
-      },
-    });
+    return prisma.generation.findUniqueOrThrow({ where: { id: generation.id } });
   } catch (error) {
     const errorMessage = getProviderErrorMessage(error);
-
-    await prisma.generation.update({
-      where: {
-        id: generation.id,
-      },
-      data: {
-        status: "FAILED",
-        errorMessage,
-        completedAt: new Date(),
-      },
-    });
+    const current = await store.get(generation.id);
+    if (current?.submissionState !== "submission_unknown") await store.markFailed(generation.id, errorMessage);
 
     throw new Error(errorMessage, {
       cause: error,
@@ -282,23 +192,7 @@ export async function processImageGeneration(generationId: string) {
 }
 
 export async function runImageGenerationInline(input: EnqueueImageGenerationInput) {
-  const provider = new FalProvider();
-  const params = buildGenerationParams(input);
-  const estimatedCost = provider.estimateCost(input.model, params);
-  const generation = await prisma.generation.create({
-    data: {
-      workspaceId: input.workspaceId,
-      brandId: input.brandId,
-      provider: provider.id,
-      model: input.model,
-      prompt: input.prompt,
-      params: toJson(params),
-      estimatedCostUsd: estimatedCost.usd,
-      estimatedCostBrl: estimatedCost.brl,
-      flowRunId: input.flowRunId,
-      flowNodeId: input.flowNodeId,
-    },
-  });
+  const { generation } = await createImageGeneration(input);
 
   await processImageGeneration(generation.id);
 
@@ -310,6 +204,51 @@ export async function runImageGenerationInline(input: EnqueueImageGenerationInpu
       assets: true,
     },
   });
+}
+
+async function createImageGeneration(input: EnqueueImageGenerationInput) {
+  const scope = await getOwnedExecutionScope();
+  if (input.workspaceId !== scope.workspaceId) throw new Error("workspaceId não pertence ao owner autorizado.");
+  await assertOwnedExecutionReferences({
+    ownerId: scope.ownerId,
+    workspaceId: scope.workspaceId,
+    brandId: input.brandId,
+    flowRunId: input.flowRunId,
+    flowNodeId: input.flowNodeId,
+    connectionId: input.connectionId,
+    providerId: input.providerId ?? "fal",
+    repository: {
+      flow: async (id) => prisma.flow.findFirst({ where: { id, workspaceId: scope.workspaceId }, select: { id: true, workspaceId: true } }),
+      brand: async (id) => prisma.brand.findFirst({ where: { id, workspaceId: scope.workspaceId }, select: { id: true, workspaceId: true } }),
+      flowRun: async (id) => prisma.flowRun.findFirst({ where: { id, workspaceId: scope.workspaceId }, select: { id: true, workspaceId: true, flowId: true } }),
+      flowRunNode: async (flowRunId, nodeId) => prisma.flowRunNode.findFirst({ where: { flowRunId, nodeId }, select: { nodeId: true } }),
+      connection: async (id) => prisma.providerConnection.findFirst({ where: { id, workspaceId: scope.workspaceId, ownerId: scope.ownerId }, select: { id: true, workspaceId: true, ownerId: true, provider: true } }),
+    },
+  });
+  const providerId = input.providerId ?? "fal";
+  const provider = await resolveServerModelProvider({ ownerId: scope.ownerId, workspaceId: scope.workspaceId, providerId, connectionId: input.connectionId });
+  const params = buildGenerationParams(input);
+  const estimatedCost = provider.estimateCost(input.model, params);
+  const operationKey = input.flowRunId && input.flowNodeId
+    ? `${scope.workspaceId}:${input.flowRunId}:${input.flowNodeId}`
+    : `standalone:${randomUUID()}`;
+  const store = new PrismaGenerationStore();
+  const generation = await findOrCreateGeneration(store, {
+    workspaceId: scope.workspaceId,
+    brandId: input.brandId,
+    connectionId: input.connectionId,
+    provider: provider.id,
+    model: input.model,
+    params: { ...params, operationKey },
+    operationKey,
+    flowRunId: input.flowRunId,
+    flowNodeId: input.flowNodeId,
+    billingMode: normalizeBillingMode(estimatedCost.billingMode, provider.id),
+    currency: "BRL",
+    estimatedCostUsd: estimatedCost.usd,
+    estimatedCostBrl: estimatedCost.brl,
+  });
+  return { generation, estimatedCost };
 }
 
 export async function startImageGenerationWorker() {

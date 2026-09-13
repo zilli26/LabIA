@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { hasDatabaseEnv } from "@/lib/db/env";
-import { prisma } from "@/lib/db/prisma";
+import { getOwnedGeneration } from "@/lib/flows/ownership";
+import { normalizeBillingMode } from "@/lib/providers/model-provider";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,18 +29,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const { generationId } = await context.params;
-  const generation = await prisma.generation.findUnique({
-    where: {
-      id: generationId,
-    },
-    include: {
-      assets: {
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-    },
-  });
+  const generation = await getOwnedGeneration(generationId);
 
   if (!generation) {
     return NextResponse.json(
@@ -57,6 +47,8 @@ export async function GET(_request: Request, context: RouteContext) {
       prompt: generation.prompt,
       estimatedCostBrl: decimalToNumber(generation.estimatedCostBrl),
       actualCostBrl: decimalToNumber(generation.actualCostBrl),
+      billingMode: normalizeBillingMode(generation.billingMode, generation.provider),
+      currency: generation.currency,
       errorMessage: generation.errorMessage,
       assets: generation.assets.map((asset) => ({
         id: asset.id,
@@ -67,4 +59,3 @@ export async function GET(_request: Request, context: RouteContext) {
     },
   });
 }
-

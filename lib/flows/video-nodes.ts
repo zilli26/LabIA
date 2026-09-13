@@ -5,11 +5,11 @@ import path from "node:path";
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
-import type { NodeDefinition } from "@/lib/flows/types";
+import type { NodeCostContext, NodeDefinition } from "@/lib/flows/types";
 import { zeroCost } from "@/lib/flows/types";
 import { FAL_VIDEO_MODELS } from "@/lib/providers/fal-models";
-import { FalProvider } from "@/lib/providers/fal";
 import type { CostEstimate, GenParams } from "@/lib/providers/model-provider";
+import { resolveModelProvider } from "@/lib/providers/provider-registry";
 
 const DEFAULT_VIDEO_MODEL = "fal-ai/wan-25-preview/image-to-video";
 const DEFAULT_GENERATION_WAIT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -31,6 +31,14 @@ function getRecord(value: unknown) {
 
 function getModel(params: Record<string, unknown>) {
   return getString(params.model) ?? DEFAULT_VIDEO_MODEL;
+}
+
+function getProviderId(params: Record<string, unknown>) {
+  return getString(params.providerId) ?? "fal";
+}
+
+function getConnectionId(params: Record<string, unknown>) {
+  return getString(params.connectionId);
 }
 
 function getPrompt(params: Record<string, unknown>) {
@@ -124,6 +132,8 @@ function buildVideoParams({
         ([key]) =>
           ![
             "model",
+            "providerId",
+            "connectionId",
             "prompt",
             "motionPrompt",
             "motion_prompt",
@@ -137,6 +147,7 @@ function buildVideoParams({
             "imagePollIntervalMs",
             "videoWaitTimeoutMs",
             "videoPollIntervalMs",
+            "operationKey",
           ].includes(key),
       ),
     ),
@@ -157,19 +168,28 @@ function estimateVideoCost(
   params: Record<string, unknown>,
   options: {
     includeImage?: boolean;
+    resolveProvider?: NodeCostContext["resolveProvider"];
   } = {},
-): CostEstimate {
-  const provider = new FalProvider();
+): CostEstimate | Promise<CostEstimate> {
   const prompt = getPrompt(params) ?? "placeholder";
 
-  return provider.estimateCost(
-    getModel(params),
-    buildVideoParams({
-      params,
-      prompt,
-      includeImage: options.includeImage,
-    }),
-  );
+  const buildCost = (provider: ReturnType<typeof resolveModelProvider>) => provider.estimateCost(
+      getModel(params),
+      buildVideoParams({
+        params,
+        prompt,
+        includeImage: options.includeImage,
+      }),
+    );
+  if (!options.resolveProvider) {
+    return buildCost(resolveModelProvider({
+      providerId: getProviderId(params),
+      connectionId: getConnectionId(params),
+      legacyProvider: "fal",
+    }));
+  }
+  return Promise.resolve(options.resolveProvider({ providerId: getProviderId(params), connectionId: getConnectionId(params) }))
+    .then(buildCost);
 }
 
 function sleep(ms: number) {
@@ -526,7 +546,7 @@ export const videoNodeDefinitions: NodeDefinition[] = [
       },
     ],
     estimateCost(ctx) {
-      return estimateVideoCost(ctx.params, { includeImage: true });
+      return estimateVideoCost(ctx.params, { includeImage: true, resolveProvider: ctx.resolveProvider });
     },
     async execute(ctx) {
       const prompt = getPrompt(ctx.params) ?? "";
@@ -540,6 +560,8 @@ export const videoNodeDefinitions: NodeDefinition[] = [
         params: ctx.params,
       });
       const model = getModel(ctx.params);
+      const providerId = getProviderId(ctx.params);
+      const connectionId = getConnectionId(ctx.params);
       const generationParams = buildVideoParams({
         params: ctx.params,
         prompt,
@@ -550,6 +572,9 @@ export const videoNodeDefinitions: NodeDefinition[] = [
       );
       const queued = await enqueueVideoGenerationJob({
         workspaceId: ctx.workspaceId,
+        providerId,
+        connectionId,
+        operationKey: `${ctx.flowRunId}:${ctx.nodeId}`,
         model,
         prompt,
         params: generationParams,
@@ -570,6 +595,8 @@ export const videoNodeDefinitions: NodeDefinition[] = [
           generationId: queued.generationId,
           queueJobId: queued.queueJobId,
           prompt,
+          providerId,
+          connectionId,
           model,
         },
         actualCost: zeroCost,
@@ -600,7 +627,7 @@ export const videoNodeDefinitions: NodeDefinition[] = [
       },
     ],
     estimateCost(ctx) {
-      return estimateVideoCost(ctx.params, { includeImage: true });
+      return estimateVideoCost(ctx.params, { includeImage: true, resolveProvider: ctx.resolveProvider });
     },
     async execute(ctx) {
       const continuationPrompt = getPrompt(ctx.params) ?? "";
@@ -631,6 +658,8 @@ export const videoNodeDefinitions: NodeDefinition[] = [
           fileName: "last-frame.png",
         });
         const model = getModel(ctx.params);
+        const providerId = getProviderId(ctx.params);
+        const connectionId = getConnectionId(ctx.params);
         const generationParams = buildVideoParams({
           params: ctx.params,
           prompt,
@@ -641,6 +670,9 @@ export const videoNodeDefinitions: NodeDefinition[] = [
         );
         const queued = await enqueueVideoGenerationJob({
           workspaceId: ctx.workspaceId,
+          providerId,
+          connectionId,
+          operationKey: `${ctx.flowRunId}:${ctx.nodeId}`,
           model,
           prompt,
           params: generationParams,
@@ -772,6 +804,8 @@ export const videoNodeDefinitions: NodeDefinition[] = [
           .filter((generationId): generationId is string => Boolean(generationId));
         const asset = await prisma.asset.create({
           data: {
+            assetKey: `flow-output:${ctx.flowRunId}:${ctx.nodeId}`,
+            outputIndex: 0,
             workspaceId: ctx.workspaceId,
             generationId: null,
             type: "VIDEO",
@@ -837,7 +871,7 @@ export const videoNodeDefinitions: NodeDefinition[] = [
       },
     ],
     estimateCost(ctx) {
-      return estimateVideoCost(ctx.params, { includeImage: false });
+      return estimateVideoCost(ctx.params, { includeImage: false, resolveProvider: ctx.resolveProvider });
     },
     async execute(ctx) {
       const prompt =
@@ -848,6 +882,8 @@ export const videoNodeDefinitions: NodeDefinition[] = [
       }
 
       const model = getModel(ctx.params);
+      const providerId = getProviderId(ctx.params);
+      const connectionId = getConnectionId(ctx.params);
       const generationParams = buildVideoParams({
         params: ctx.params,
         prompt,
@@ -858,6 +894,9 @@ export const videoNodeDefinitions: NodeDefinition[] = [
       );
       const queued = await enqueueVideoGenerationJob({
         workspaceId: ctx.workspaceId,
+        providerId,
+        connectionId,
+        operationKey: `${ctx.flowRunId}:${ctx.nodeId}`,
         model,
         prompt,
         params: generationParams,

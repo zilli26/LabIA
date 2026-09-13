@@ -1,5 +1,55 @@
 # RETOMADA - estado vivo do projeto
 
+## Persistência OAuth após restart — 2026-09-13
+
+Correção TDD aplicada: falha de `initialize` apenas encerra o App Server e preserva o `CODEX_HOME`; `startLogin` não faz logout automático de conta cacheada e exige desconexão explícita; status consulta `account/read` antes de rejeitar correlação ausente e reidrata tentativa pendente usando `loginId`/`loginExpiresAt` server-side persistidos em `ProviderConnection`. O cancelamento permanece com a limpeza anterior, conforme decisão pendente separada.
+
+Validação local sem login, geração, worker, migration ou cota: RED reproduzido em 6 testes antes do patch; GREEN em 13 testes Codex, 46 testes de provider-connections e suíte completa com 185 testes. Lint, typecheck, `next build` com cliente Prisma `--no-engine` e `git diff --check` passaram. `npm run build` foi tentado duas vezes e ficou bloqueado pelo `EPERM` do Prisma ao renomear `node_modules/.prisma/client/query_engine-windows.dll.node`.
+
+## `/criar` com seleção OpenAI e confirmação server-side — 2026-09-13
+
+O caminho guiado agora carrega somente conexões OpenAI conectadas do owner/workspace atual e modelos de imagem retornados pelo executor Codex 0.154.0 após os gates O3. Conexão e modelo são selects reais; fal.ai mantém o modelo legado explícito. A revisão cria/atualiza o Flow, pede cotação com `billingMode = subscription` e emite confirmação assinada; só então apresenta o CTA único `Gerar 1 imagem`. O enqueue usa a rota de FlowRun existente e a UI mostra estado e link para a Biblioteca.
+
+Validação desta rodada: testes DOM e de rota com fixtures/mock de backend, sem clicar em geração real, login, worker, migration, cota ou API paga. A primeira imagem real permanece pendente de autorização específica.
+
+## O3 oficial implementado por fixtures — 2026-09-13
+
+O3 foi implementado no executor local usando somente o protocolo oficial do Codex App Server 0.154.0: `thread/start`, `turn/start`, evento `item/completed` com `imageGeneration`, recuperação por `thread/read` e `thread/items/list`. O resultado é validado como PNG/Base64 e `savedPath` só é aceito dentro do `CODEX_HOME` dedicado. O coordenador e os jobs reais preservam `operationKey`, `submission_unknown`, reuso de `providerJobId` e Asset idempotente. A conexão continua `generationValidationStatus = unvalidated` até uma única imagem real autorizada; nenhuma imagem, cota, worker, migration ou login foi executado nesta rodada.
+
+## O1 encerrado e limite O2/O3 — 2026-09-12
+
+O1 permanece implementado e validado localmente; a sessão/login existente do Codex não foi encerrada nem reiniciada nesta sessão. A correção runtime aceita `x-forwarded-host` somente quando é autoridade local idêntica ao Host/origem e mantém as recusas de host remoto, cadeia encaminhada, Origin e fetch-site.
+
+O2 independente foi incorporado: Provider/Conexão/Modelo são selecionáveis em `/criar` e no nó de imagem, fal.ai permanece compatível, jobs resolvem provider por seleção explícita e há confirmação server-side, ownership, coordenador durável testável para concorrência, Asset idempotente e submit ambíguo com providers falsos. A migration aditiva `20260912000000_add_execution_guards` foi criada, mas nenhuma migration adicional foi aplicada.
+
+O3 OpenAI estava bloqueado no registro histórico abaixo; o status vigente acima substitui esse bloqueio. O protocolo oficial agora está integrado por fixtures, sem geração real, e a conexão permanece `generationValidationStatus = unvalidated` até autorização específica.
+
+## Bloco `/criar` concluído — 2026-09-12
+
+Entrada guiada `/criar` validada localmente: Imagem ativa, vídeos em preparação, custo `A calcular`, execução bloqueada, formulário preservado em erro e navegação sem overflow em desktop/mobile. Nenhum provider, API, DB, migration, worker, OAuth, login, gasto ou deploy foi acionado.
+
+**Próximo ponteiro:** O1 — conexão ChatGPT local segura, portando o corte aprovado de `feat/o1-openai-chatgpt-connection` em branch limpa a partir de `main`, sem login real, migration ou gasto no primeiro passo.
+
+## Revisão independente da implementação O1 — 2026-09-11
+
+Felipe pediu validar a entrega feita no ChatGPT. Branch remota `feat/o1-openai-oauth` conferida em `ef37b12`; main permanece `395e369`. Actions `34616487976` realmente passou (121 testes/14 arquivos e build), porém exclui o teste TSX da interface. O checkpoint remoto da RETOMADA está confirmado; o workflow temporário continua presente.
+
+**Parecer:** corrigir acesso local, escopo por dono/workspace, proteção da migration, logout após restart, correlação de login e cobertura TSX antes do login real. Relatório com evidências: `docs/O1-REVISAO-2026-09-11.md`. Cinco cenários independentes reproduziram falhas; 29 testes existentes de providers, Prisma generate, typecheck e lint passaram localmente. Metadados Supabase consultados em modo leitura confirmam tabela nova ausente e default grants para anon/authenticated; nenhuma migration aplicada.
+
+Código revisado em worktree isolada `C:/Users/teste/Desktop/LabIA-o1-review`. Não houve alteração enviada à branch, login, geração ou worker. Os documentos locais anteriores estão preservados; o relatório desta revisão é local. Próxima ação: corrigir os achados em O1 e repetir a validação antes de retomar os passos de login.
+
+## OAuth OpenAI e provider por nó — 2026-09-11
+
+Felipe pediu implementar OAuth OpenAI e reafirmou: **não existe provider principal; cada nó escolhe Provider, Conexão e Modelo**. Decisão registrada na ADR 0002.
+
+- **Conferido nesta sessão:** checkout limpo no início em `395e369`; ausência de ProviderConnection no schema; FalProvider fixo em nós/jobs; workers reenviam geração em retry mesmo com providerJobId persistido. Codex CLI instalado `0.153.4`; geração local de JSON Schema confirmou login `chatgpt` e `chatgptDeviceCode`. Nenhum login foi iniciado.
+- **Informado por Felipe na retomada, não revalidado nesta sessão:** Vercel/produção validadas; Supabase ACTIVE_HEALTHY; três migrations aplicadas; Storage/bucket assets validados; ausência de jobs queued/ready/active e gerações antigas pendentes; fluxo manual “Teste manual — Imagem → Vídeo” já criado. Esse relato supera a pendência histórica de Supabase inativo abaixo, sem constituir nova leitura ao vivo pelo Codex.
+- **Entrega:** `docs/OAUTH-OPENAI-ESPECIFICACAO.md` e `docs/OAUTH-OPENAI-CONSTRUCAO.md`, vinculados aos contratos dos módulos 01/02/03. Status: proposta para aprovação, sem código implementado. Não confundir o pedido de produto recebido com aprovação dos detalhes técnicos agora propostos.
+- **Proposta:** login gerido por Codex App Server em executor local dedicado; credenciais fora do repo e separadas da sessão Codex existente. Primeira entrega conecta a conta no LabIA local sem consumir fila. Imagem é capacidade a provar separadamente. Uso via Vercel exige contrato complementar de sessão do dono/autorização e pareamento do executor.
+- **Débitos:** aprovação SDD do contrato novo; implementar ProviderConnection/login; resolver provider por nó; proteção contra submit duplicado; custo API versus cota; retry seletivo; prova de imagem OAuth; depois flow misto e Seedance direto/Google. Schema local de login não prova acesso de geração na conta.
+- **Próxima ação:** Felipe revisar e aprovar os dois contratos propostos; então executar O1 na ordem. Regra de aprovação vem do AGENTS.md, item 1. Geração real exige autorização própria com custo/cota declarados.
+- **Validação desta entrega documental:** referências locais e `git diff --check`; sem suíte de aplicação, pois nenhum código foi alterado. Nenhuma migration aplicada, worker iniciado, geração enfileirada ou gasto de geração realizado.
+
 ## Publicação do projeto no GitHub — 2026-09-10
 
 Felipe solicitou enviar o projeto para o GitHub após conectar o LabIA à Vercel, para continuar pelo ChatGPT.

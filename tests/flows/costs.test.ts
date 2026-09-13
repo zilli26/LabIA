@@ -25,7 +25,7 @@ function edge(id: string, source: string, target: string) {
 }
 
 function cost(usd: number, brl: number, extra: Partial<CostEstimate> = {}): CostEstimate {
-  return { usd, brl, ...extra };
+  return { usd, brl, billingMode: "api", ...extra };
 }
 
 describe("sumCosts", () => {
@@ -60,6 +60,16 @@ describe("sumCosts", () => {
     const result = sumCosts([cost(1, 5, { source: "fal" }), cost(2, 10, { source: "openai" })]);
 
     expect(result.source).toBe("flow");
+  });
+
+  it("preserves the mandatory billingMode and rejects mixed billable modes", () => {
+    expect(sumCosts([cost(1, 5, { billingMode: "api" })]).billingMode).toBe("api");
+    expect(sumCosts([cost(1, 5, { billingMode: "subscription" })]).billingMode).toBe("subscription");
+    expect(sumCosts([cost(1, 5, { billingMode: "local" })]).billingMode).toBe("local");
+    expect(() => sumCosts([
+      cost(1, 5, { billingMode: "api" }),
+      cost(1, 5, { billingMode: "subscription" }),
+    ])).toThrow(/billingMode/i);
   });
 
   // Regressão (corrigida 2026-07-03): sumCosts computava usdBrlRate como
@@ -173,7 +183,7 @@ describe("estimateFlowCost", () => {
       inputs: [],
       outputs: [{ id: "out", label: "out", type: "any" }],
       estimateCost() {
-        return { usd: 2, brl: 10, usdBrlRate: 5, lineItems: [], source: "test" };
+        return { usd: 2, brl: 10, usdBrlRate: 5, lineItems: [], source: "test", billingMode: "api" };
       },
       async execute() {
         return { outputs: {} };

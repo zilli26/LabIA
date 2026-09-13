@@ -1,6 +1,22 @@
 # 03-Fluxos — Construção
 
-**Status:** E1 aberta; tarefas 1-5 implementadas em 2026-07-03 (execução/custos prontos no backend; validação end-to-end em Postgres depende de `DATABASE_URL`/`DIRECT_URL` reais e worker pg-boss ativo); app shell global implementado em 2026-07-03 com dashboard em `/`, lista em `/fluxos` e canvas em `/fluxos/[id]` sem sidebar fixa · **Etapa:** E1 (canvas+motor), E2 (templates), E3 (Video Director) · **Depende de:** nada (é a fundação — primeira coisa da E1 junto com ModelProvider).
+**Status do adendo providers/OAuth (2026-09-13):** O1 foi validado localmente; O2 tem resolução por Provider/Conexão/Modelo nos nós/jobs e execução comum testável com providers falsos. O3 OpenAI está integrado pelo contrato oficial de imagem do App Server 0.154.0, e `/criar` já usa conexão/modelo aprovados pelo executor antes da confirmação server-side. A primeira imagem real continua não validada até autorização específica; exposição remota segue dependente do contrato complementar. Os status E1 abaixo são históricos.
+
+**Status:** E1 aberta; tarefas 1-5 implementadas em 2026-07-03 (execução/custos prontos no backend; validação end-to-end em Postgres depende de `DATABASE_URL`/`DIRECT_URL` reais e worker pg-boss ativo); app shell global implementado em 2026-07-03 com dashboard em `/`, lista em `/fluxos` e canvas em `/fluxos/[id]` sem sidebar fixa. Incremento de entrada guiada `/criar` validado localmente em 2026-09-12 · **Etapa:** E1 (canvas+motor), E2 (templates), E3 (Video Director) · **Depende de:** nada (é a fundação — primeira coisa da E1 junto com ModelProvider).
+
+## Incremento aprovado — entrada guiada `/criar` (2026-09-11)
+
+**Status:** validado localmente em 2026-09-12; sem provider, API, banco, migration, worker, OAuth, login, gasto ou deploy.
+
+**Evidências:** eslint focado nos 3 TSX passou; `npm.cmd run typecheck` passou; `git diff --check` do recorte passou. No portal Maestri em `localhost /criar`, desktop 1440x891 e mobile 390x844, a rota renderizou HTTP sem overlay, com `h1` exato, três radios acessíveis (Imagem ativa; dois vídeos desabilitados), custo `A calcular`, Gerar desabilitado, erro de intenção preservando o formulário, revisão válida funcionando, navegação `Novo fluxo` para `/criar` e sem overflow horizontal na nova rota.
+
+1. [x] Criar a rota `/criar` com `h1` exato `O que você quer criar?` e três opções acessíveis: Imagem, Vídeo curto e Vídeo 30s+.
+2. [x] Permitir selecionar somente Imagem; manter Vídeo curto e Vídeo 30s+ no estado `Em preparação`.
+3. [x] Após selecionar Imagem, exibir intenção, formato, modo, resumo, etapas didáticas e preview no layout de painel compacto à esquerda e conteúdo ao centro/direita.
+4. [x] Manter a jornada guiada; oferecer `Editar no canvas` apenas como ação secundária. O canvas permanece a espinha dorsal interna, sem abertura automática.
+5. [x] Exibir custo `A calcular`, bloquear execução e preservar os campos preenchidos em erros de interação/validação.
+6. [x] Não adicionar simulações de upload, referência, custo, provider ou geração; não iniciar worker, migration, OAuth, login, deploy ou gasto.
+7. [x] Validar por DOM: `h1` exato, três opções acessíveis, seleção de Imagem com os campos/etapas previstos, custo `A calcular`, execução bloqueada e formulário preservado após erro.
 
 ## Ordem de tarefas (E1)
 

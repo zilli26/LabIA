@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { hasDatabaseEnv } from "@/lib/db/env";
 import {
-  getFlowById,
   parseStoredFlowGraph,
-  updateFlowGraph,
 } from "@/lib/db/flows";
+import { getOwnedFlow, getOwnedExecutionScope } from "@/lib/flows/ownership";
+import { prisma } from "@/lib/db/prisma";
 import { isFlowGraph } from "@/lib/flows/graph";
 import { validateFlowGraph } from "@/lib/flows/validation";
 
@@ -31,7 +31,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const { flowId } = await context.params;
 
   try {
-    const flow = await getFlowById(flowId);
+    const flow = await getOwnedFlow(flowId);
 
     if (!flow) {
       return NextResponse.json(
@@ -103,11 +103,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const flow = await updateFlowGraph({
-      flowId,
-      name: body.name.trim(),
-      graph: body.graph,
+    const scope = await getOwnedExecutionScope();
+    const updated = await prisma.flow.updateMany({
+      where: { id: flowId, workspaceId: scope.workspaceId },
+      data: { name: body.name.trim(), graph: body.graph as unknown as import("@prisma/client").Prisma.InputJsonValue },
     });
+    if (updated.count !== 1) return NextResponse.json({ error: "Flow não encontrado." }, { status: 404 });
+    const flow = await getOwnedFlow(flowId);
+    if (!flow) return NextResponse.json({ error: "Flow não encontrado." }, { status: 404 });
 
     return NextResponse.json({
       flow: {

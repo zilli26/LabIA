@@ -2,6 +2,9 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 import { estimateFlowCost, sumCosts } from "@/lib/flows/costs";
+import { buildExecutionSnapshot, hashExecutionSnapshot } from "@/lib/flows/execution-confirmation";
+import { assertOwnedFlowBrand, getOwnedExecutionScope, getOwnedFlow } from "@/lib/flows/ownership";
+import { assertOperationalGraphProviders, createServerProviderResolver } from "@/lib/providers/provider-registry";
 import type { FlowGraph } from "@/lib/flows/graph";
 import { parseStoredFlowGraph } from "@/lib/flows/parse";
 import {
@@ -22,26 +25,39 @@ import type { NodeExecutionResult, PortSpec } from "@/lib/flows/types";
 export async function createFlowRun({
   flowId,
   targetNodeId,
+  confirmedSnapshotHash,
 }: {
   flowId: string;
   targetNodeId?: string | null;
+  confirmedSnapshotHash: string;
 }) {
-  const flow = await prisma.flow.findUnique({
-    where: {
-      id: flowId,
-    },
-  });
+  const scope = await getOwnedExecutionScope();
+  const flow = await getOwnedFlow(flowId);
 
   if (!flow) {
     throw new Error("Flow não encontrado.");
   }
+  await assertOwnedFlowBrand(flow.brandId, scope.workspaceId);
 
   const graph = parseStoredFlowGraph(flow.graph);
+  await assertOperationalGraphProviders({ graph, ownerId: scope.ownerId, workspaceId: scope.workspaceId });
   const plan = buildExecutionPlan(graph, { targetNodeId });
   const costEstimate = await estimateFlowCost(graph, {
     targetNodeId,
     plan,
+    resolveProvider: createServerProviderResolver(scope),
   });
+  const snapshot = buildExecutionSnapshot({
+    ownerId: scope.ownerId,
+    workspaceId: scope.workspaceId,
+    flowId,
+    targetNodeId,
+    graph,
+    cost: costEstimate,
+  });
+  if (hashExecutionSnapshot(snapshot) !== confirmedSnapshotHash) {
+    throw new Error("Confirmação de execução ausente ou obsoleta.");
+  }
   const estimatedByNode = new Map(
     costEstimate.nodes.map((node) => [node.nodeId, node.estimatedCost]),
   );
@@ -102,10 +118,13 @@ export async function createFlowRun({
   return getFlowRun(run.id);
 }
 
-export async function getFlowRun(flowRunId: string) {
-  const run = await prisma.flowRun.findUnique({
+export async function getFlowRun(flowRunId: string, flowId?: string) {
+  const scope = await getOwnedExecutionScope();
+  const run = await prisma.flowRun.findFirst({
     where: {
       id: flowRunId,
+      workspaceId: scope.workspaceId,
+      ...(flowId ? { flowId } : {}),
     },
     include: {
       nodes: true,
@@ -120,9 +139,11 @@ export async function getFlowRun(flowRunId: string) {
 }
 
 export async function executeFlowRunNode(job: FlowNodeJobData) {
-  const run = await prisma.flowRun.findUnique({
+  const scope = await getOwnedExecutionScope();
+  const run = await prisma.flowRun.findFirst({
     where: {
       id: job.flowRunId,
+      workspaceId: scope.workspaceId,
     },
     include: {
       nodes: true,
@@ -519,6 +540,7 @@ async function refreshFlowRunActualCost(flowRunId: string) {
       usdBrlRate: 0,
       lineItems: [],
       source: "flow-run-node",
+      billingMode: node.params && typeof node.params === "object" && !Array.isArray(node.params) && (node.params as Record<string, unknown>).providerId === "openai" ? "subscription" : node.params && typeof node.params === "object" && !Array.isArray(node.params) && (node.params as Record<string, unknown>).providerId === "labia/ffmpeg" ? "local" : "api",
     })),
   );
 

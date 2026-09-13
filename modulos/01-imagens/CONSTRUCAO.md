@@ -1,5 +1,7 @@
 # 01-Imagens - Construção
 
+**Status do adendo OAuth (2026-09-13):** O1 foi validado localmente; O2 permanece preservado; O3 usa o protocolo oficial do App Server 0.154.0 com thread/turn, item imageGeneration, recuperação e normalização segura por fixtures. A primeira imagem real ainda não foi executada, portanto a validação permanece unvalidated. Os registros abaixo descrevem a implementação anterior.
+
 **Status:** tarefas 1-5 implementadas e **primeira imagem real gerada em 2026-07-03** (Generation `cmr5jy3ry0000vdeczlnfbh0j`, FLUX dev, custo real R$0,135 persistido, asset 1024x768 no Supabase Storage, visível na `/biblioteca` com prompt recuperável). Canvas registra `Prompt` e `Gerar Imagem` no registry vivo, estima custo antes pelo `FalProvider`, worker unificado (`npm run worker`) consome as filas `flow-node-execution` e `image.generate`. Handles do canvas corrigidos (invisíveis -> 16px esmeralda) após feedback do Felipe. Comparação lado a lado (tarefa 6) **adiada por decisão do Felipe em 2026-07-03**. **Etapa:** E1. **Depende de:** fundação do canvas (módulo 03, parte E1), worker vivo e `ModelProvider`.
 
 ## Ordem de tarefas

@@ -1,5 +1,9 @@
 # 01-Imagens — Especificação
 
+## Adendo OAuth — 2026-09-13, O2 preservado e O3 implementado por contrato oficial
+
+O pedido atual do Felipe acrescenta Provider/Conexão/Modelo por nó e conexão OpenAI OAuth. Contrato completo: [OAuth e providers por nó](../../docs/OAUTH-OPENAI-ESPECIFICACAO.md). Login, capacidade de imagem e uso de cota têm estados separados; outputs viram Assets. Este adendo técnico ainda não está aprovado e não altera retroativamente o aceite da E1.
+
 **Etapa:** E1 (prioridade #1) · **Dor que resolve:** planos caros de plataformas de geração; falta de comparação entre modelos; falta de visibilidade de custo.
 
 ## O que terá

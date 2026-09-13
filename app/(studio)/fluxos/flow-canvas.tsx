@@ -46,9 +46,9 @@ import {
   type LabNodeKind,
 } from "@/lib/flows/graph";
 import { countConsecutiveVideoExtends } from "@/lib/flows/video-chain";
-import { hasPaidVideoNode, PAID_VIDEO_KINDS } from "@/lib/flows/video-cost-gate";
 import type { SerializableNodeDefinition } from "@/lib/flows/types";
 import { cn } from "@/lib/utils";
+import { PAID_VIDEO_KINDS } from "@/lib/flows/video-cost-gate";
 
 type FlowRecord = {
   id: string;
@@ -74,6 +74,7 @@ type CostResponse = {
       };
     }>;
   };
+  confirmation?: { token: string; expiresAt: number };
 };
 
 type FlowRunResponse = {
@@ -118,6 +119,7 @@ type CostConfirmState = {
   isLoading: boolean;
   cost: CostResponse["cost"] | null;
   errorMessage: string | null;
+  confirmationToken: string | null;
 };
 
 const nodeTypes = {
@@ -291,6 +293,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     isLoading: false,
     cost: null,
     errorMessage: null,
+    confirmationToken: null,
   });
   const costConfirmRequestRef = useRef(0);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -734,7 +737,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     setIsSaving(false);
   }, [edges, estimateCost, flowId, flowName, getViewport, nodes]);
 
-  const enqueueFlowRun = useCallback(async () => {
+  const enqueueFlowRun = useCallback(async (confirmationToken: string) => {
     setIsRunning(true);
     setErrorMessage(null);
     setRunMessage(null);
@@ -744,7 +747,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ confirmationToken }),
     });
 
     if (!response.ok) {
@@ -767,11 +770,6 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       return;
     }
 
-    if (!hasPaidVideoNode(nodes)) {
-      await enqueueFlowRun();
-      return;
-    }
-
     const graph: FlowGraph = {
       nodes,
       edges,
@@ -785,6 +783,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       isLoading: true,
       cost: null,
       errorMessage: null,
+      confirmationToken: null,
     });
 
     const requestId = costConfirmRequestRef.current + 1;
@@ -801,6 +800,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
         isLoading: false,
         cost: payload.cost,
         errorMessage: null,
+        confirmationToken: payload.confirmation?.token ?? null,
       });
     } catch (error) {
       if (costConfirmRequestRef.current !== requestId) {
@@ -810,6 +810,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
         open: true,
         isLoading: false,
         cost: null,
+        confirmationToken: null,
         errorMessage:
           error instanceof Error
             ? error.message
@@ -819,7 +820,6 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   }, [
     applyCostEstimate,
     edges,
-    enqueueFlowRun,
     fetchFlowCost,
     getViewport,
     isDirty,
@@ -837,25 +837,28 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       isLoading: false,
       cost: null,
       errorMessage: null,
+      confirmationToken: null,
     });
   }, [isRunning]);
 
   const handleConfirmCost = useCallback(async () => {
-    if (!costConfirm.cost || costConfirm.isLoading || costConfirm.errorMessage) {
+    if (!costConfirm.cost || !costConfirm.confirmationToken || costConfirm.isLoading || costConfirm.errorMessage) {
       return;
     }
 
-    await enqueueFlowRun();
+    await enqueueFlowRun(costConfirm.confirmationToken);
     setCostConfirm({
       open: false,
       isLoading: false,
       cost: null,
       errorMessage: null,
+      confirmationToken: null,
     });
   }, [
     costConfirm.cost,
     costConfirm.errorMessage,
     costConfirm.isLoading,
+    costConfirm.confirmationToken,
     enqueueFlowRun,
   ]);
 
