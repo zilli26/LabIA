@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { hasDatabaseEnv } from "@/lib/db/env";
 import { prisma } from "@/lib/db/prisma";
 import { starterFlowGraph, type FlowGraph } from "@/lib/flows/graph";
+import { createFlowTemplateGraph, type FlowTemplateId } from "@/lib/flows/templates";
 
 export { parseStoredFlowGraph } from "@/lib/flows/parse";
 
@@ -50,14 +51,14 @@ export async function getOrCreateStarterFlow() {
   });
 }
 
-export async function createFlow(name = "Novo fluxo") {
+export async function createFlow(name = "Novo fluxo", template?: FlowTemplateId) {
   const workspace = await ensureDefaultWorkspace();
 
   return prisma.flow.create({
     data: {
       workspaceId: workspace.id,
       name,
-      graph: starterFlowGraph as unknown as Prisma.InputJsonValue,
+      graph: (template ? createFlowTemplateGraph(template) : starterFlowGraph) as unknown as Prisma.InputJsonValue,
     },
   });
 }

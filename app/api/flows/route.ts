@@ -7,6 +7,7 @@ import {
   listRecentFlows,
   parseStoredFlowGraph,
 } from "@/lib/db/flows";
+import type { FlowTemplateId } from "@/lib/flows/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   if (!hasDatabaseEnv()) {
     return NextResponse.json(
       {
@@ -60,7 +61,19 @@ export async function POST() {
   }
 
   try {
-    const flow = await createFlow();
+    const body = (await request.json().catch(() => ({}))) as { template?: unknown };
+    const template = body.template;
+    const templateNames: Record<FlowTemplateId, string> = {
+      "image-to-video": "Imagem-base → Vídeo curto",
+      "image-only": "Imagem-base",
+    };
+    if (template !== undefined && template !== "image-to-video" && template !== "image-only") {
+      return NextResponse.json({ error: "Template de fluxo inválido." }, { status: 400 });
+    }
+    const flow = await createFlow(
+      template === undefined ? undefined : templateNames[template],
+      template,
+    );
 
     return NextResponse.json(
       {
