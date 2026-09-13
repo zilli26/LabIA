@@ -217,14 +217,27 @@ export function getExecutorConfig() {
   return { url, token };
 }
 
-export function sanitizeProviderMessage(input: unknown) {
+export function sanitizeProviderMessage(input: unknown, secrets: readonly string[] = []) {
   const text = input instanceof Error ? input.message : String(input ?? "Erro desconhecido");
-  return text
-    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "[redacted]")
-    .replace(/\b(Bearer\s+)[A-Za-z0-9._~-]+/gi, "$1[redacted]")
-    .replace(/\b(access_token|refresh_token|id_token)\b\s*[:=]\s*[^\s,;}]+/gi, "$1=[redacted]")
+  return sanitizePublicText(text, secrets)
     .replace(/([\\/])auth\.json\b/gi, "$1[credential-file]")
     .slice(0, 500);
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function sanitizePublicText(input: string, secrets: readonly string[] = []) {
+  let text = input;
+  for (const secret of secrets) {
+    if (secret.length >= 8) text = text.replace(new RegExp(escapeRegExp(secret), "g"), "[redacted]");
+  }
+  return text
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "[redacted]")
+    .replace(/\b(access_token|refresh_token|id_token|token|cookie|set-cookie)\b\s*[:=]\s*[^\s,;}]+/gi, "$1=[redacted]")
+    .replace(/\b(authorization|cookie)\s*:\s*[^\r\n]+/gi, "$1: [redacted]");
 }
 
 export function isValidSessionRef(value: string) {

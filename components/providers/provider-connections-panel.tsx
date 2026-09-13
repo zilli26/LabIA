@@ -54,6 +54,11 @@ export type ProviderConnectionsPanelState = {
 
 export type ProviderConnectionsApi = <T>(url: string, init?: RequestInit) => Promise<T>;
 
+type RemoteImageOptions = {
+  executor?: { status?: "online" | "offline"; lastSeenAt?: string; message?: string };
+  connections?: Array<{ id: string; label: string; planType: string | null; models: Array<{ id: string; name: string }> }>;
+};
+
 function messageFromError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -309,7 +314,7 @@ function LoginInstruction({ instruction, popupBlocked }: { instruction: LoginIns
   );
 }
 
-export function ProviderConnectionsPanel({ request = api }: { request?: ProviderConnectionsApi } = {}) {
+function LocalProviderConnectionsPanel({ request = api }: { request?: ProviderConnectionsApi } = {}) {
   const controller = useMemo(() => createProviderConnectionsController(request), [request]);
   const [state, setState] = useState(controller.getState());
   const { connections, loginState, popupBlocked, sessionReady, sessionLoading, loading, busyId, error } = state;
@@ -362,4 +367,79 @@ export function ProviderConnectionsPanel({ request = api }: { request?: Provider
       {primaryInstruction && primaryPopupBlocked ? <span className="sr-only">Fallback de autorização disponível</span> : null}
     </section>
   );
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+export function RemoteExecutorImageOptions() {
+  const [result, setResult] = useState<RemoteImageOptions | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/provider-connections/image-options", { cache: "no-store", credentials: "same-origin" })
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => ({}))) as RemoteImageOptions;
+        if (active) setResult(response.ok ? payload : { executor: { status: "offline", message: "executor pareado offline: snapshot indisponível." }, connections: [] });
+      })
+      .catch(() => {
+        if (active) setResult({ executor: { status: "offline", message: "executor pareado offline: snapshot indisponível." }, connections: [] });
+      });
+    return () => { active = false; };
+  }, []);
+
+  if (!result) {
+    return <section className="rounded-node border border-lab-border bg-lab-surface-1 p-6 text-sm text-lab-text-dim" data-id="remote-executor-options">Consultando executor pareado…</section>;
+  }
+
+  if (result.executor?.status !== "online") {
+    return <section className="rounded-node border border-dashed border-lab-border bg-lab-surface-1 p-6 text-sm text-lab-text-dim" data-id="remote-executor-options"><p>{result.executor?.message ?? "executor pareado offline: snapshot indisponível."}</p><p className="mt-2 text-xs">A preview não pode consultar o executor local. Nenhum login remoto é iniciado aqui.</p></section>;
+  }
+
+  return <section className="space-y-3" data-id="remote-executor-options"><p className="text-sm text-lab-text-dim">Executor pareado online · modelos disponíveis no snapshot</p>{(result.connections ?? []).map((connection) => <article key={connection.id} className="rounded-node border border-lab-border bg-lab-surface-1 p-4"><h3 className="font-display font-semibold">{connection.label}</h3><p className="mt-1 text-xs text-lab-text-muted">{connection.planType ? `plano ${connection.planType}` : "OpenAI"}</p><ul className="mt-3 space-y-1 text-sm">{connection.models.map((model) => <li key={model.id}>{model.name}</li>)}</ul></article>)}</section>;
+}
+
+export function RemoteStagingReadiness() {
+  const [readiness, setReadiness] = useState<{ overall?: string; environment?: { databaseUrl?: { configured?: boolean }; directUrl?: { configured?: boolean }; ownerId?: { configured?: boolean }; storage?: { supabaseUrl?: { configured?: boolean }; serviceRoleKey?: { configured?: boolean }; assetsBucket?: { configured?: boolean } } }; database?: { status?: string; executorPairingTable?: string; message?: string }; executor?: { status?: string; ttlMs?: number; lastSeenAt?: string | null; message?: string }; worker?: { message?: string } } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/provider-connections/readiness", { cache: "no-store", credentials: "same-origin" })
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => ({}))) as NonNullable<typeof readiness>;
+        if (active) setReadiness(response.ok ? payload : { overall: "unavailable" });
+      })
+      .catch(() => {
+        if (active) setReadiness({ overall: "unavailable" });
+      });
+    return () => { active = false; };
+  }, []);
+
+  return <section className="rounded-node border border-lab-border bg-lab-surface-1 p-4 text-sm" data-id="remote-staging-readiness">
+    <p className="font-medium text-lab-text">Prontidão da preview: {readiness?.overall === "unavailable" ? "indisponível" : readiness ? "revisão necessária" : "consultando"}</p>
+    <p className="mt-2 text-xs text-lab-text-dim">Banco: {readiness?.database?.status ?? "consultando"} · Tabela ExecutorPairing: {readiness?.database?.executorPairingTable ?? "consultando"}</p>
+    <p className="mt-1 text-xs text-lab-text-dim">Executor: {readiness?.executor?.status ?? "consultando"} · TTL: {readiness?.executor?.ttlMs ?? "consultando"} ms · lastSeenAt: {readiness?.executor?.lastSeenAt ?? "nunca"}</p>
+    <p className="mt-1 text-xs text-lab-text-dim">Env: DATABASE_URL {readiness?.environment?.databaseUrl?.configured ? "presente" : "ausente"} · DIRECT_URL {readiness?.environment?.directUrl?.configured ? "presente" : "ausente"} · owner {readiness?.environment?.ownerId?.configured ? "presente" : "ausente"}</p>
+    <p className="mt-1 text-xs text-lab-text-dim">Storage: URL {readiness?.environment?.storage?.supabaseUrl?.configured ? "presente" : "ausente"} · service key {readiness?.environment?.storage?.serviceRoleKey?.configured ? "presente" : "ausente"} · bucket {readiness?.environment?.storage?.assetsBucket?.configured ? "presente" : "ausente"}</p>
+    {readiness?.database?.message ? <p className="mt-2 text-xs text-lab-text-muted">{readiness.database.message}</p> : null}
+    {readiness?.executor?.message ? <p className="mt-1 text-xs text-lab-text-muted">{readiness.executor.message}</p> : null}
+    <p className="mt-1 text-xs text-lab-text-muted">{readiness?.worker?.message ?? "Worker não comprovado por esta leitura segura."}</p>
+    <p className="mt-2 text-xs text-lab-text-muted">Esta área é somente informativa; nenhuma execução ou login remoto é iniciado.</p>
+  </section>;
+}
+
+export function ProviderConnectionsPanel({ request = api, hostname }: { request?: ProviderConnectionsApi; hostname?: string } = {}) {
+  const [runtime, setRuntime] = useState<"pending" | "local" | "remote">("pending");
+
+  useEffect(() => {
+    setRuntime(isLoopbackHostname(hostname ?? window.location.hostname) ? "local" : "remote");
+  }, [hostname]);
+
+  if (runtime === "pending") {
+    return <section className="rounded-node border border-lab-border bg-lab-surface-1 p-6 text-sm text-lab-text-dim" data-id="provider-connections-panel">Carregando executor…</section>;
+  }
+  if (runtime === "remote") return <div className="space-y-3"><RemoteStagingReadiness /><RemoteExecutorImageOptions /></div>;
+  return <LocalProviderConnectionsPanel request={request} />;
 }

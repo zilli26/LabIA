@@ -12,6 +12,7 @@ import {
   type CodexProcessFactory,
 } from "@/lib/provider-connections/codex-app-server";
 import { ProviderExecutorManager } from "@/lib/provider-connections/executor-service";
+import { deriveExecutorHeartbeatState } from "@/lib/provider-connections/heartbeat";
 
 const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
 
@@ -183,6 +184,55 @@ describe("Codex App Server image generation official protocol", () => {
     expect(fixture.requests.map((request) => request.method)).toContain("thread/start");
     expect(fixture.requests.map((request) => request.method)).toContain("turn/start");
     manager.closeAll();
+  });
+
+  it("monta heartbeat com estado real do App Server, capacidades e modelos", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "labia-codex-heartbeat-online-"));
+    roots.push(root);
+    const fixture = officialFixtureProcess();
+    const manager = new ProviderExecutorManager({ codexHomeRoot: root, processFactory: fixture.factory });
+    const connections = await manager.readHeartbeatConnections([{
+      connectionId: "connection-a",
+      provider: "openai",
+      sessionRef: "labia-codex:123e4567-e89b-42d3-a456-426614174025",
+    }]);
+
+    expect(connections[0]).toMatchObject({
+      authStatus: "connected",
+      executorStatus: "online",
+      capabilities: [{ key: "image_generation", status: "available" }],
+      models: [{ id: "gpt-5.5", kind: "image" }],
+    });
+    expect(fixture.requests.map((request) => request.method)).toContain("account/read");
+    expect(fixture.requests.map((request) => request.method)).toContain("modelProvider/capabilities/read");
+    expect(fixture.requests.map((request) => request.method)).toContain("model/list");
+    manager.closeAll();
+  });
+
+  it("publica desconectado/offline quando a conta ou App Server nao estao disponiveis", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "labia-codex-heartbeat-offline-"));
+    roots.push(root);
+    const disconnected = officialFixtureProcess({ account: { account: null, requiresOpenaiAuth: true } });
+    const manager = new ProviderExecutorManager({ codexHomeRoot: root, processFactory: disconnected.factory });
+    const disconnectedConnections = await manager.readHeartbeatConnections([{
+      connectionId: "connection-a",
+      provider: "openai",
+      sessionRef: "labia-codex:123e4567-e89b-42d3-a456-426614174026",
+    }]);
+    expect(disconnectedConnections[0]).toMatchObject({ authStatus: "disconnected", executorStatus: "online", capabilities: [{ status: "unavailable" }], models: [] });
+
+    const brokenFactory: CodexProcessFactory = () => { throw new Error("App Server offline"); };
+    const broken = new ProviderExecutorManager({ codexHomeRoot: root, processFactory: brokenFactory });
+    const offlineConnections = await broken.readHeartbeatConnections([{
+      connectionId: "connection-b",
+      provider: "openai",
+      sessionRef: "labia-codex:123e4567-e89b-42d3-a456-426614174027",
+    }]);
+    expect(offlineConnections[0]).toMatchObject({ authStatus: "error", executorStatus: "error" });
+    expect(deriveExecutorHeartbeatState([])).toBe("offline");
+    expect(deriveExecutorHeartbeatState(offlineConnections)).toBe("error");
+    manager.closeAll();
+    broken.closeAll();
   });
 
   it("recusa plano Free, capabilities ausentes e modelo sem modalidade image antes de turn/start", async () => {

@@ -13,6 +13,7 @@
     "worker": "tsx scripts/worker.ts",
     "worker:image": "tsx scripts/image-worker.ts",
     "provider:executor": "tsx scripts/provider-executor.ts",
+    "staging:readiness": "tsx scripts/check-staging-readiness.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

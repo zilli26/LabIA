@@ -1,5 +1,7 @@
 # 03-Fluxos — Construção
 
+**Hardening O5-P0 (2026-09-13):** snapshot e respostas sanitizados por allowlist; replay bloqueado por `lastSequence` e update atomico; rota autentica antes do parse e limita body a 16 KiB; heartbeat monta estado real do Codex App Server/conexoes e deriva desconectado/erro/offline. Nenhum P1 deve continuar ate este P0 ser validado; migration segue nao aplicada.
+
 **Status do adendo providers/OAuth (2026-09-13):** O1 foi validado localmente; O2 tem resolução por Provider/Conexão/Modelo nos nós/jobs e execução comum testável com providers falsos. O3 OpenAI está integrado pelo contrato oficial de imagem do App Server 0.154.0, e `/criar` já usa conexão/modelo aprovados pelo executor antes da confirmação server-side. A primeira imagem real continua não validada até autorização específica; exposição remota segue dependente do contrato complementar. Os status E1 abaixo são históricos.
 
 **Status:** E1 aberta; tarefas 1-5 implementadas em 2026-07-03 (execução/custos prontos no backend; validação end-to-end em Postgres depende de `DATABASE_URL`/`DIRECT_URL` reais e worker pg-boss ativo); app shell global implementado em 2026-07-03 com dashboard em `/`, lista em `/fluxos` e canvas em `/fluxos/[id]` sem sidebar fixa. Incremento de entrada guiada `/criar` validado localmente em 2026-09-12 · **Etapa:** E1 (canvas+motor), E2 (templates), E3 (Video Director) · **Depende de:** nada (é a fundação — primeira coisa da E1 junto com ModelProvider).
@@ -7,6 +9,8 @@
 ## Incremento aprovado — entrada guiada `/criar` (2026-09-11)
 
 **Status:** validado localmente em 2026-09-12; sem provider, API, banco, migration, worker, OAuth, login, gasto ou deploy.
+
+**Status O5-P0 (2026-09-13):** transporte de presença do executor implementado em `executor_pairings`: hash de segredo, heartbeat HTTPS outbound, snapshot/lastSeen com TTL e leitura autenticada sem loopback. Execução remota, jobs e comandos continuam fora deste bloco; migration aditiva não aplicada.
 
 **Evidências:** eslint focado nos 3 TSX passou; `npm.cmd run typecheck` passou; `git diff --check` do recorte passou. No portal Maestri em `localhost /criar`, desktop 1440x891 e mobile 390x844, a rota renderizou HTTP sem overlay, com `h1` exato, três radios acessíveis (Imagem ativa; dois vídeos desabilitados), custo `A calcular`, Gerar desabilitado, erro de intenção preservando o formulário, revisão válida funcionando, navegação `Novo fluxo` para `/criar` e sem overflow horizontal na nova rota.
 

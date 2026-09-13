@@ -3,6 +3,13 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { CodexAppServerClient, resolveCodexHomeRoot, type CodexImageAsset, type CodexImageItem, type CodexImageStartInput, type CodexProcessFactory } from "./codex-app-server";
 import type { ExecutorAccountStatus, LoginInstruction, OpenAiLoginMethod, ProviderConnectionStatus } from "./types";
 import { isValidSessionRef, sanitizeProviderMessage } from "./security";
+import type { ExecutorHeartbeatConnection } from "./heartbeat";
+
+export type ExecutorHeartbeatConnectionConfig = {
+  connectionId: string;
+  provider: string;
+  sessionRef: string;
+};
 
 type LoginAttempt = {
   loginId: string;
@@ -319,6 +326,36 @@ export class ProviderExecutorManager {
   async readImageOptions(sessionRef: string) {
     const session = this.getOrCreateSession(sessionRef);
     return { models: await session.client.readImageGenerationModels() };
+  }
+
+  async readHeartbeatConnections(configurations: readonly ExecutorHeartbeatConnectionConfig[]): Promise<ExecutorHeartbeatConnection[]> {
+    return Promise.all(configurations.map(async (configuration) => {
+      const status = await this.status(configuration.sessionRef);
+      let models: ExecutorHeartbeatConnection["models"] = [];
+      let capabilityStatus: ExecutorHeartbeatConnection["capabilities"][number]["status"] = "unavailable";
+
+      if (status.authStatus === "connected" && status.executorStatus === "online") {
+        try {
+          models = (await this.readImageOptions(configuration.sessionRef)).models.map((model) => ({
+            id: model.id,
+            name: model.name,
+            kind: "image" as const,
+          }));
+          capabilityStatus = models.length > 0 ? "available" : "unavailable";
+        } catch {
+          capabilityStatus = "error";
+        }
+      }
+
+      return {
+        connectionId: configuration.connectionId,
+        provider: configuration.provider,
+        authStatus: status.authStatus,
+        executorStatus: status.executorStatus,
+        capabilities: [{ key: "image_generation", status: capabilityStatus }],
+        models,
+      } satisfies ExecutorHeartbeatConnection;
+    }));
   }
 
   async waitForImageGeneration(sessionRef: string, jobId: string): Promise<ExecutorImageResult> {

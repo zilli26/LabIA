@@ -1,5 +1,15 @@
 # RETOMADA - estado vivo do projeto
 
+## O5-P0 hardening apos reviewer - 2026-09-13
+
+P0 corrigido antes de qualquer P1: snapshot/respostas passam por allowlist e redacao de Bearer, sk-, token/cookie e evidencia sensivel; heartbeat exige `sequence` monotonicamente crescente por pairing com `updateMany` atomico; a rota autentica antes do parse e limita body a 16 KiB. O provider-executor agora consulta o estado real do Codex App Server/conexoes configuradas apenas por identidade, reportando desconectado/erro e deixando o control-plane derivar offline por TTL. Migration aditiva permanece apenas no codigo, sem worker, login, generation, migration aplicada, commit, push ou deploy.
+
+## O5-P0 — pareamento e presença do executor — 2026-09-13
+
+Implementado o transporte mínimo para o executor local declarar presença à preview Vercel por heartbeat outbound HTTPS. `executor_pairings` guarda hash do segredo, owner/workspace, versão, estado, `lastSeenAt` e snapshot seguro de conexões/providers, capabilities e modelos; leituras autenticadas derivam `offline` após TTL de 90s. O cliente é configurável por ambiente e não consulta jobs/comandos. Migration aditiva criada em código, não aplicada; execução remota permanece fora do P0.
+
+Validação: 4 arquivos focados, 13 testes; lint e typecheck passaram; `git diff --check` passou. `prisma generate` e `build` ainda dependem de resolver o bloqueio local `EPERM` no client Prisma gerado.
+
 ## Persistência OAuth após restart — 2026-09-13
 
 Correção TDD aplicada: falha de `initialize` apenas encerra o App Server e preserva o `CODEX_HOME`; `startLogin` não faz logout automático de conta cacheada e exige desconexão explícita; status consulta `account/read` antes de rejeitar correlação ausente e reidrata tentativa pendente usando `loginId`/`loginExpiresAt` server-side persistidos em `ProviderConnection`. O cancelamento permanece com a limpeza anterior, conforme decisão pendente separada.

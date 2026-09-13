@@ -41,13 +41,13 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function renderPanel(request: ProviderConnectionsApi) {
+async function renderPanel(request: ProviderConnectionsApi, hostname?: string) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   let root!: Root;
   await act(async () => {
     root = createRoot(container);
-    root.render(<ProviderConnectionsPanel request={request} />);
+    root.render(<ProviderConnectionsPanel request={request} hostname={hostname} />);
   });
   return { container, root };
 }
@@ -93,6 +93,41 @@ function localSessionExpiredError() {
 }
 
 describe("ProviderConnectionsPanel DOM real", () => {
+  it.each(["localhost", "[::1]"])("seleciona o painel local para loopback %s", async (hostname) => {
+    const request = (async (url: string) => url.endsWith("/session") ? {} : { connections: [disconnected] }) as ProviderConnectionsApi;
+    const { container, root } = await renderPanel(request, hostname);
+    await settle();
+
+    expect(container.querySelector('[data-id="provider-connections-panel"]')).not.toBeNull();
+    expect(container.querySelector('[data-id="remote-staging-readiness"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("seleciona o painel remoto no preview e exibe os estados seguros", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => Response.json(String(input).endsWith("/readiness") ? {
+      overall: "not_ready",
+      environment: {
+        databaseUrl: { configured: true }, directUrl: { configured: false }, ownerId: { configured: true },
+        storage: { supabaseUrl: { configured: true }, serviceRoleKey: { configured: false }, assetsBucket: { configured: true } },
+      },
+      database: { status: "migration_missing", executorPairingTable: "missing", message: "A tabela ExecutorPairing não está disponível." },
+      executor: { status: "offline", ttlMs: 90000, lastSeenAt: "2026-09-13T11:57:00.000Z", message: "Executor pareado offline." },
+      worker: { status: "not_proven", message: "Worker não comprovado." }, executionAllowed: false,
+    } : { executor: { status: "offline", message: "executor pareado offline: snapshot indisponível." }, connections: [] })));
+    const request = vi.fn() as unknown as ProviderConnectionsApi;
+    const { container, root } = await renderPanel(request, "preview.example");
+    await settle();
+
+    expect(container.querySelector('[data-id="remote-staging-readiness"]')).not.toBeNull();
+    expect(container.textContent).toContain("migration_missing");
+    expect(container.textContent).toContain("TTL: 90000 ms");
+    expect(container.textContent).toContain("2026-09-13T11:57:00.000Z");
+    expect(container.textContent).toContain("Worker não comprovado");
+    expect(container.textContent).not.toMatch(/secret|token|postgresql|https:\/\/db/i);
+    expect(request).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
   it("inicia sessão, abre o device login no gesto, faz polling e desconecta", async () => {
     vi.useFakeTimers();
     const calls: Array<{ url: string; method: string; body?: string; headers?: string }> = [];

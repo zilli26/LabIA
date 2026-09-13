@@ -3,6 +3,7 @@ import {
   listOwnedProviderConnections,
 } from "@/lib/provider-connections/store";
 import { readExecutorImageOptions } from "@/lib/provider-connections/executor-client";
+import { readRemoteExecutorImageOptions } from "@/lib/provider-connections/remote-image-options";
 import {
   assertLocalConnectionsRequest,
   LocalConnectionsError,
@@ -12,6 +13,29 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function normalizeHostname(value: string) {
+  const authority = value.trim().toLowerCase();
+  const candidate = authority === "::1" ? `[${authority}]` : authority;
+  try {
+    return new URL(`http://${candidate}`).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return authority.replace(/^\[|\]$/g, "");
+  }
+}
+
+function isLoopbackRequest(request: Request) {
+  const url = new URL(request.url);
+  if (!LOOPBACK_HOSTS.has(normalizeHostname(url.hostname))) return false;
+  const host = request.headers.get("host");
+  const normalizedHost = host ? normalizeHostname(host) : null;
+  if (host && !LOOPBACK_HOSTS.has(normalizedHost!)) return false;
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost && normalizeHostname(forwardedHost) !== normalizedHost) return false;
+  return true;
+}
 
 function failure(error: unknown) {
   if (error instanceof LocalConnectionsError) {
@@ -25,6 +49,9 @@ function failure(error: unknown) {
 
 export async function GET(request: Request) {
   try {
+    if (!isLoopbackRequest(request)) {
+      return noStoreJson(await readRemoteExecutorImageOptions());
+    }
     assertLocalConnectionsRequest(request);
     const connections = await listOwnedProviderConnections();
     const eligible = connections.filter(

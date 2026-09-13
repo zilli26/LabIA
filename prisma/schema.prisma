@@ -41,6 +41,7 @@ model Workspace {
   flows               Flow[]
   flowRuns            FlowRun[]
   providerConnections ProviderConnection[]
+  executorPairings    ExecutorPairing[]
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
 
@@ -261,4 +262,25 @@ model ProviderCapability {
   @@unique([connectionId, key])
   @@index([key, status])
   @@map("provider_capabilities")
+}
+
+model ExecutorPairing {
+  id              String    @id @default(cuid())
+  workspaceId     String    @map("workspace_id")
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerId         String    @map("owner_id")
+  label           String
+  secretHash      String    @map("secret_hash")
+  status          String    @default("active")
+  executorVersion String?   @map("executor_version")
+    state           String    @default("offline")
+    lastSeenAt      DateTime? @map("last_seen_at")
+    lastSequence    BigInt    @default(0) @map("last_sequence")
+    snapshot        Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId, ownerId])
+  @@index([status, lastSeenAt])
+  @@map("executor_pairings")
 }
