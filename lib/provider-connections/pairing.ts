@@ -140,8 +140,20 @@ export async function createExecutorPairing(input: {
   label: string;
   secret: string;
 }) {
+  return createExecutorPairingWithClient(prisma, input);
+}
+
+export async function createExecutorPairingWithClient(
+  client: Pick<Prisma.TransactionClient, "executorPairing">,
+  input: {
+    workspaceId: string;
+    ownerId: string;
+    label: string;
+    secret: string;
+  },
+) {
   assertSecret(input.secret);
-  const row = await prisma.executorPairing.create({
+  const row = await client.executorPairing.create({
     data: {
       workspaceId: input.workspaceId,
       ownerId: input.ownerId,

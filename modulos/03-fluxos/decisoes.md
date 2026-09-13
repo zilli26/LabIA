@@ -9,3 +9,4 @@
 
 - **2026-09-13 · O5-P0 usa control-plane outbound com segredo hasheado.** Por quê: a preview precisa ler presença e capacidades sem expor localhost ou permitir que a Vercel chame `127.0.0.1`; o executor só declara estado conhecido e não recebe jobs/comandos neste corte.
 - **2026-09-13 · Hardening O5-P0 exige snapshot allowlisted/sanitizado e sequência monotônica atômica.** Por quê: resposta pública não pode carregar credenciais ou evidências sensíveis, e heartbeat repetido/fora de ordem não pode reabrir estado antigo; estado publicado vem do Codex App Server real, com TTL para offline.
+- **2026-09-13 · O5-P3 provisiona pairing somente por CLI local confirmada.** Por quê: staging precisa de um caminho operacional auditável sem UI, sem aplicar migration e sem registrar o segredo; pairing ativo é recusado por padrão, a decisão é protegida por lock transacional por owner/workspace e a flag de existência apenas cria outro, nunca sobrescreve o anterior.

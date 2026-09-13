@@ -24,16 +24,26 @@ import { getStagingReadiness } from "@/lib/provider-connections/staging-readines
 const NOW = new Date("2026-09-13T12:00:00.000Z");
 
 function setConfiguredEnvironment() {
-  vi.stubEnv("DATABASE_URL", "postgresql://user:secret@db.example/staging");
-  vi.stubEnv("DIRECT_URL", "postgresql://user:secret@db.example/staging");
+  vi.stubEnv("DATABASE_URL", "postgresql://user:***@db.example/staging");
+  vi.stubEnv("DIRECT_URL", "postgresql://user:***@db.example/staging");
   vi.stubEnv("LABIA_LOCAL_OWNER_ID", "owner-owned");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://storage.example");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-secret");
   vi.stubEnv("SUPABASE_ASSETS_BUCKET", "assets");
 }
 
+function setUnconfiguredEnvironment() {
+  vi.stubEnv("DATABASE_URL", "");
+  vi.stubEnv("DIRECT_URL", "");
+  vi.stubEnv("LABIA_LOCAL_OWNER_ID", "");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+  vi.stubEnv("SUPABASE_ASSETS_BUCKET", "");
+}
+
 beforeEach(() => {
   vi.unstubAllEnvs();
+  setUnconfiguredEnvironment();
   vi.clearAllMocks();
   mocks.workspaceFindUnique.mockResolvedValue({ id: "workspace-owned" });
   mocks.getLocalOwnerId.mockReturnValue("owner-owned");
