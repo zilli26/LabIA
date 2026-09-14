@@ -138,6 +138,22 @@ export async function getFlowRun(flowRunId: string, flowId?: string) {
   return serializeFlowRun(run);
 }
 
+export async function getLatestFlowRun(flowId: string) {
+  const scope = await getOwnedExecutionScope();
+  const run = await prisma.flowRun.findFirst({
+    where: {
+      flowId,
+      workspaceId: scope.workspaceId,
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    include: {
+      nodes: true,
+    },
+  });
+
+  return run ? serializeFlowRun(run) : null;
+}
+
 export async function executeFlowRunNode(job: FlowNodeJobData) {
   const scope = await getOwnedExecutionScope();
   const run = await prisma.flowRun.findFirst({

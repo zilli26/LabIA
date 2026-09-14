@@ -5,10 +5,14 @@ import { CalendarDays, Image as ImageIcon, SlidersHorizontal } from "lucide-reac
 import { Badge } from "@/components/ui/badge";
 import { hasDatabaseEnv } from "@/lib/db/env";
 import { prisma } from "@/lib/db/prisma";
+import { getOwnedExecutionScope } from "@/lib/flows/ownership";
 import { FAL_IMAGE_MODELS } from "@/lib/providers/fal-models";
 
 type LibraryPageProps = {
   searchParams?: Promise<{
+    project?: string;
+    type?: string;
+    provider?: string;
     model?: string;
     date?: string;
   }>;
@@ -72,15 +76,29 @@ function getModelName(modelId: string | null) {
   return FAL_IMAGE_MODELS.find((model) => model.id === modelId)?.name ?? modelId;
 }
 
+function getProviderModelLabel(provider: string | null, modelId: string | null) {
+  const model = getModelName(modelId);
+  return provider ? `${provider} / ${model}` : model;
+}
+
 function buildFilterHref({
+  project,
+  type,
+  provider,
   model,
   date,
 }: {
+  project?: string;
+  type?: string;
+  provider?: string;
   model?: string;
   date?: string;
 }) {
   const params = new URLSearchParams();
 
+  if (project && project !== "all") params.set("project", project);
+  if (type && type !== "all") params.set("type", type);
+  if (provider && provider !== "all") params.set("provider", provider);
   if (model && model !== "all") {
     params.set("model", model);
   }
@@ -95,6 +113,9 @@ function buildFilterHref({
 
 export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const filters = (await searchParams) ?? {};
+  const selectedProject = filters.project ?? "all";
+  const selectedType = filters.type === "IMAGE" || filters.type === "VIDEO" ? filters.type : "all";
+  const selectedProvider = filters.provider ?? "all";
   const selectedModel = filters.model ?? "all";
   const selectedDate = filters.date ?? "all";
 
@@ -109,14 +130,27 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
     );
   }
 
+  const supportsProjectRelations = Boolean((prisma as unknown as { project?: unknown }).project);
+  const scope = supportsProjectRelations ? await getOwnedExecutionScope() : null;
+  const projects = supportsProjectRelations
+    ? await prisma.project.findMany({
+        where: { workspaceId: scope?.workspaceId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
+  const dateStart = getDateStart(selectedDate);
   const assets = await prisma.asset.findMany({
     where: {
-      type: "IMAGE",
+      ...(scope ? { workspaceId: scope.workspaceId } : {}),
+      ...(selectedProject === "none" ? { projectId: null } : selectedProject !== "all" ? { projectId: selectedProject } : {}),
+      ...(selectedType === "all" ? { type: { in: ["IMAGE", "VIDEO"] } } : { type: selectedType }),
+      ...(selectedProvider !== "all" ? { provider: selectedProvider } : {}),
       ...(selectedModel !== "all" ? { model: selectedModel } : {}),
-      ...(getDateStart(selectedDate)
+      ...(dateStart
         ? {
             createdAt: {
-              gte: getDateStart(selectedDate),
+              gte: dateStart,
             },
           }
         : {}),
@@ -126,9 +160,34 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
     },
     include: {
       generation: true,
+      project: { select: { id: true, name: true } },
     },
     take: 80,
   });
+  const providerModelSource = supportsProjectRelations
+    ? await prisma.asset.findMany({
+        where: { workspaceId: scope?.workspaceId },
+        select: { provider: true, model: true },
+        distinct: ["provider", "model"],
+      })
+    : assets;
+  const providerModelOptions = Array.from(new Map(
+    providerModelSource
+      .filter((asset) => asset.provider || asset.model)
+      .map((asset) => [`${asset.provider ?? ""}\u0000${asset.model ?? ""}`, { provider: asset.provider, model: asset.model }]),
+  ).values());
+  const providerModelFilters: Array<{ provider: string | null; model: string | null }> = [];
+  const seenProviderModels = new Set<string>();
+  for (const option of [
+    ...FAL_IMAGE_MODELS.map((model) => ({ provider: "fal", model: model.id })),
+    ...providerModelOptions,
+  ]) {
+    const key = `${option.provider ?? ""}\u0000${option.model ?? ""}`;
+    if (!seenProviderModels.has(key)) {
+      seenProviderModels.add(key);
+      providerModelFilters.push(option);
+    }
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-5 py-8">
@@ -140,25 +199,38 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
           filtros
         </div>
         <FilterLink
-          href={buildFilterHref({ date: selectedDate })}
-          active={selectedModel === "all"}
+          href={buildFilterHref({ project: selectedProject, type: "all", provider: "all", model: "all", date: selectedDate })}
+          active={selectedType === "all" && selectedProvider === "all" && selectedModel === "all" && selectedProject === "all"}
         >
-          todos modelos
+          todos
         </FilterLink>
-        {FAL_IMAGE_MODELS.map((model) => (
+        {projects.map((project) => (
+          <FilterLink key={project.id} href={buildFilterHref({ project: project.id, type: selectedType, provider: selectedProvider, model: selectedModel, date: selectedDate })} active={selectedProject === project.id}>
+            {project.name}
+          </FilterLink>
+        ))}
+        <FilterLink href={buildFilterHref({ project: "none", type: selectedType, provider: selectedProvider, model: selectedModel, date: selectedDate })} active={selectedProject === "none"}>Sem projeto</FilterLink>
+        <div className="mx-1 h-5 w-px bg-lab-border" />
+        {(["IMAGE", "VIDEO"] as const).map((type) => (
+          <FilterLink key={type} href={buildFilterHref({ project: selectedProject, type, provider: selectedProvider, model: selectedModel, date: selectedDate })} active={selectedType === type}>
+            {type === "IMAGE" ? "imagens" : "vídeos"}
+          </FilterLink>
+        ))}
+        <div className="mx-1 h-5 w-px bg-lab-border" />
+        {providerModelFilters.map((option) => (
           <FilterLink
-            key={model.id}
-            href={buildFilterHref({ model: model.id, date: selectedDate })}
-            active={selectedModel === model.id}
+            key={`${option.provider ?? ""}-${option.model ?? ""}`}
+            href={buildFilterHref({ project: selectedProject, type: selectedType, provider: option.provider ?? "all", model: option.model ?? "all", date: selectedDate })}
+            active={selectedProvider === option.provider && selectedModel === option.model}
           >
-            {model.name}
+            {getProviderModelLabel(option.provider, option.model)}
           </FilterLink>
         ))}
         <div className="mx-1 h-5 w-px bg-lab-border" />
         {dateFilters.map((filter) => (
           <FilterLink
             key={filter.value}
-            href={buildFilterHref({ model: selectedModel, date: filter.value })}
+          href={buildFilterHref({ project: selectedProject, type: selectedType, provider: selectedProvider, model: selectedModel, date: filter.value })}
             active={selectedDate === filter.value}
           >
             {filter.label}
@@ -177,17 +249,30 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
                 key={asset.id}
                 className="overflow-hidden rounded-control border border-lab-border bg-lab-surface-1"
               >
-                <div className="relative aspect-square bg-lab-surface-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={asset.url}
-                    alt={prompt || "Asset gerado"}
-                    className="h-full w-full object-cover"
-                  />
+                <div
+                  className={`relative bg-lab-surface-2 ${
+                    asset.type === "VIDEO" ? "aspect-video" : "aspect-square"
+                  }`}
+                >
+                  {asset.type === "VIDEO" ? (
+                    <video
+                      src={asset.url}
+                      controls
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={asset.url}
+                      alt={prompt || "Asset gerado"}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
                 </div>
                 <div className="space-y-3 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <Badge variant="default">{getModelName(asset.model)}</Badge>
+                    <Badge variant="default">{asset.project?.name ?? "Sem projeto"}</Badge>
+                    <Badge variant="default">{getProviderModelLabel(asset.provider, asset.model)}</Badge>
                     <Badge variant="cost">{formatBrl(actualCost)}</Badge>
                   </div>
                   <p className="line-clamp-3 min-h-14 font-mono text-xs leading-5 text-lab-text-dim">
@@ -216,8 +301,8 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
             Nenhum asset encontrado
           </h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-lab-text-dim">
-            Execute um fluxo com o nó Gerar Imagem. Quando o worker concluir, a
-            imagem aparece aqui com prompt e custo real.
+            Execute um fluxo com um nó de imagem ou vídeo. Quando o worker concluir,
+            o asset aparece aqui com preview, prompt e custo real.
           </p>
         </section>
       )}

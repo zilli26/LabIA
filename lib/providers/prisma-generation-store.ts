@@ -178,6 +178,14 @@ export class PrismaGenerationStore implements GenerationStore {
   async persistAsset(id: string, index: number, asset: unknown) {
     const generation = await prisma.generation.findUnique({ where: { id } });
     if (!generation) throw new Error(`Generation não encontrada: ${id}`);
+    let projectId: string | null = null;
+    if (generation.flowRunId) {
+      const flowRun = await prisma.flowRun.findFirst({
+        where: { id: generation.flowRunId, workspaceId: generation.workspaceId },
+        select: { flow: { select: { projectId: true } } },
+      });
+      projectId = flowRun?.flow?.projectId ?? null;
+    }
     const image = asset as GeneratedAsset;
     const existing = await prisma.asset.findUnique({ where: { generationId_outputIndex: { generationId: id, outputIndex: index } } });
     if (existing) return;
@@ -195,6 +203,7 @@ export class PrismaGenerationStore implements GenerationStore {
         assetKey: deterministicAssetKey(id, index),
         outputIndex: index,
         workspaceId: generation.workspaceId,
+        projectId,
         brandId: generation.brandId,
         generationId: id,
         type: image.durationSeconds === undefined ? "IMAGE" : "VIDEO",

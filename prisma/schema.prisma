@@ -24,6 +24,23 @@ enum AssetOrigin {
   @@map("asset_origin")
 }
 
+enum ProjectType {
+  IMAGE @map("image")
+  VIDEO @map("video")
+
+  @@map("project_type")
+}
+
+enum ProjectStatus {
+  DRAFT       @map("draft")
+  IN_PROGRESS @map("in_progress")
+  REVIEW      @map("review")
+  APPROVED    @map("approved")
+  ARCHIVED    @map("archived")
+
+  @@map("project_status")
+}
+
 enum GenerationStatus {
   QUEUED  @map("queued")
   RUNNING @map("running")
@@ -39,6 +56,7 @@ model Workspace {
   slug                String               @unique
   brands              Brand[]
   flows               Flow[]
+  projects            Project[]
   flowRuns            FlowRun[]
   providerConnections ProviderConnection[]
   executorPairings    ExecutorPairing[]
@@ -67,6 +85,9 @@ model Flow {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   brandId     String?   @map("brand_id")
   brand       Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  projectId   String?   @map("project_id")
+  project     Project?  @relation("ProjectFlows", fields: [projectId], references: [id], onDelete: SetNull)
+  primaryForProjects Project[] @relation("ProjectPrimaryFlow")
   name        String
   isTemplate  Boolean   @default(false) @map("is_template")
   graph       Json
@@ -76,7 +97,30 @@ model Flow {
 
   @@index([workspaceId, updatedAt])
   @@index([brandId])
+  @@index([workspaceId, projectId])
   @@map("flows")
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  workspaceId     String        @map("workspace_id")
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name            String
+  type            ProjectType
+  objective       String
+  aspectRatio     String        @map("aspect_ratio")
+  status          ProjectStatus @default(DRAFT)
+  durationSeconds Int?          @map("duration_seconds")
+  primaryFlowId   String?       @unique @map("primary_flow_id")
+  primaryFlow     Flow?         @relation("ProjectPrimaryFlow", fields: [primaryFlowId], references: [id], onDelete: SetNull)
+  flows           Flow[]        @relation("ProjectFlows")
+  assets          Asset[]
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, status])
+  @@map("projects")
 }
 
 model Generation {
@@ -120,6 +164,8 @@ model Generation {
 model Asset {
   id            String      @id @default(cuid())
   workspaceId   String      @map("workspace_id")
+  projectId     String?     @map("project_id")
+  project       Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   brandId       String?     @map("brand_id")
   generationId  String?     @map("generation_id")
   outputIndex   Int         @map("output_index")
@@ -145,6 +191,7 @@ model Asset {
   @@index([workspaceId, createdAt])
   @@index([brandId])
   @@index([generationId])
+  @@index([workspaceId, projectId, createdAt])
   @@unique([generationId, outputIndex])
   @@map("assets")
 }

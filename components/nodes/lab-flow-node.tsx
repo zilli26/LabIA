@@ -583,13 +583,14 @@ export function LabFlowNodeComponent({
   return (
     <div
       className={cn(
-        "relative w-64 overflow-hidden rounded-lab border bg-lab-surface-2 text-lab-text shadow-none transition-colors",
+        "relative w-64 overflow-visible rounded-lab border bg-lab-surface-2 text-lab-text shadow-none transition-colors",
         selected ? "border-lab-reagent shadow-lab-focus" : "border-lab-border",
       )}
       style={{ "--node-accent": meta.accent } as CSSProperties}
     >
-      <div className="h-0.5 w-full bg-[var(--node-accent)]" />
-      <div className="p-3">
+      <div className="overflow-hidden rounded-[inherit]">
+        <div className="h-0.5 w-full bg-[var(--node-accent)]" />
+        <div className="p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-[var(--node-accent)]">
@@ -766,6 +767,7 @@ export function LabFlowNodeComponent({
         {data.kind === "video-assembly" ? (
           <AssemblyControls params={params} updateParams={updateParams} />
         ) : null}
+        </div>
       </div>
 
       <Handle

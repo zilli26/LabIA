@@ -1,5 +1,13 @@
 # RETOMADA - estado vivo do projeto
 
+## Primeiro corte vertical de Projeto — 2026-09-14
+
+Projeto foi implementado com schema Prisma aditivo e migration `20260914000000_add_projects` criada, mas não aplicada. O CRUD server-side usa owner/workspace scope local; criar um Projeto grava apenas dados mínimos e um Flow principal transacional, sem geração. `/projetos` oferece onboarding mínimo e abertura do Flow; a Biblioteca preserva imagens/vídeos, inclui filtros combináveis de Projeto/tipo/provider-modelo/período e mostra legados como “Sem projeto”. Character Sheet e Style Bible continuam somente como pacote em `projetos/`, sem editor.
+
+Validação: RED inicial dos testes novos; GREEN focado 17/17; suíte 260/260 em 56 arquivos; lint, typecheck, `prisma validate` com URLs fictícias e build passaram; `git diff --check` passou. Nenhuma migration, worker, login, geração, commit, push ou deploy foi executado. Próximo ponteiro: aplicar a migration somente com autorização operacional e validar o ambiente de staging; execução remota permanece fora deste corte.
+
+Correção P1 do corte: Assets persistidos agora herdam `projectId` por `Generation.flowRunId → FlowRun → Flow`; a Biblioteca retorna antes de resolver owner/workspace quando não há DB; e a rota de reidratação responde erro de infraestrutura com mensagem segura e HTTP 503, sem expor `error.message`. RED/GREEN focado: 6/6.
+
 ## O5-P0 hardening apos reviewer - 2026-09-13
 
 P0 corrigido antes de qualquer P1: snapshot/respostas passam por allowlist e redacao de Bearer, sk-, token/cookie e evidencia sensivel; heartbeat exige `sequence` monotonicamente crescente por pairing com `updateMany` atomico; a rota autentica antes do parse e limita body a 16 KiB. O provider-executor agora consulta o estado real do Codex App Server/conexoes configuradas apenas por identidade, reportando desconectado/erro e deixando o control-plane derivar offline por TTL. Migration aditiva permanece apenas no codigo, sem worker, login, generation, migration aplicada, commit, push ou deploy.

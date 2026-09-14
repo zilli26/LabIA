@@ -97,6 +97,10 @@ type FlowRunResponse = {
   };
 };
 
+type LatestFlowRunResponse = {
+  flowRun: FlowRunResponse["flowRun"] | null;
+};
+
 type GenerationResponse = {
   generation: {
     id: string;
@@ -269,6 +273,78 @@ function createNode(
   } satisfies LabFlowNode;
 }
 
+const NEW_NODE_WIDTH = 256;
+const NEW_NODE_HEIGHT = 480;
+const NEW_NODE_GAP = 32;
+
+type NodeRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function getNodeRect(node: LabFlowNode): NodeRect {
+  const measured = (node as LabFlowNode & { measured?: { width?: number; height?: number } }).measured;
+  const dimensions = node as LabFlowNode & { width?: number; height?: number };
+
+  return {
+    x: node.position.x,
+    y: node.position.y,
+    width: measured?.width ?? dimensions.width ?? NEW_NODE_WIDTH,
+    height: measured?.height ?? dimensions.height ?? NEW_NODE_HEIGHT,
+  };
+}
+
+function overlapsWithGap(candidate: NodeRect, existing: NodeRect) {
+  return (
+    candidate.x < existing.x + existing.width + NEW_NODE_GAP &&
+    candidate.x + candidate.width + NEW_NODE_GAP > existing.x &&
+    candidate.y < existing.y + existing.height + NEW_NODE_GAP &&
+    candidate.y + candidate.height + NEW_NODE_GAP > existing.y
+  );
+}
+
+function findFreeNodePosition(
+  nodes: LabFlowNode[],
+  anchor: { x: number; y: number },
+) {
+  const existingRects = nodes.map(getNodeRect);
+  const cellWidth =
+    Math.max(NEW_NODE_WIDTH, ...existingRects.map((rect) => rect.width)) +
+    NEW_NODE_GAP;
+  const cellHeight =
+    Math.max(NEW_NODE_HEIGHT, ...existingRects.map((rect) => rect.height)) +
+    NEW_NODE_GAP;
+  const origin = {
+    x: anchor.x - NEW_NODE_WIDTH / 2,
+    y: anchor.y - NEW_NODE_HEIGHT / 2,
+  };
+
+  for (let radius = 0; radius <= nodes.length + 1; radius += 1) {
+    for (let y = -radius; y <= radius; y += 1) {
+      for (let x = -radius; x <= radius; x += 1) {
+        if (Math.max(Math.abs(x), Math.abs(y)) !== radius) {
+          continue;
+        }
+
+        const candidate = {
+          x: origin.x + x * cellWidth,
+          y: origin.y + y * cellHeight,
+          width: NEW_NODE_WIDTH,
+          height: NEW_NODE_HEIGHT,
+        };
+
+        if (!existingRects.some((rect) => overlapsWithGap(candidate, rect))) {
+          return { x: candidate.x, y: candidate.y };
+        }
+      }
+    }
+  }
+
+  return origin;
+}
+
 function getRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
@@ -296,6 +372,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     confirmationToken: null,
   });
   const costConfirmRequestRef = useRef(0);
+  const flowLoadedRef = useRef(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const { fitView, getViewport, screenToFlowPosition, setViewport } =
     useReactFlow<LabFlowNode, Edge>();
@@ -444,6 +521,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   );
 
   const loadFlow = useCallback(async () => {
+    flowLoadedRef.current = false;
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -463,6 +541,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     setNodes(graph.nodes);
     setEdges(graph.edges);
     setIsDirty(false);
+    flowLoadedRef.current = true;
     setLastSavedAt(
       new Date(payload.flow.updatedAt).toLocaleTimeString("pt-BR", {
         hour: "2-digit",
@@ -653,6 +732,33 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     [applyRunState, flowId],
   );
 
+  const rehydrateLatestRun = useCallback(async () => {
+    const response = await fetch(`/api/flows/${flowId}/runs/latest`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = (await response.json()) as LatestFlowRunResponse;
+    if (payload.flowRun) {
+      applyRunState(payload.flowRun);
+
+      if (!["done", "failed"].includes(payload.flowRun.status)) {
+        void pollRun(payload.flowRun.id);
+      }
+    }
+  }, [applyRunState, flowId, pollRun]);
+
+  useEffect(() => {
+    if (isLoading || !flowLoadedRef.current) {
+      return;
+    }
+
+    void rehydrateLatestRun();
+  }, [isLoading, rehydrateLatestRun]);
+
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((currentEdges) =>
@@ -676,17 +782,14 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
   const handleAddNode = useCallback(
     (definition: SerializableNodeDefinition) => {
-      const position = screenToFlowPosition({
+      const anchor = screenToFlowPosition({
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
       });
 
       setNodes((currentNodes) => [
         ...currentNodes,
-        createNode(definition, {
-          x: position.x - 128,
-          y: position.y - 64,
-        }),
+        createNode(definition, findFreeNodePosition(currentNodes, anchor)),
       ]);
       setIsDirty(true);
       setRunMessage(null);
@@ -962,6 +1065,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           <MiniMap
             pannable
             zoomable
+            position="bottom-left"
             className="!h-28 !w-44"
             nodeColor="var(--lab-surface-2)"
             nodeStrokeColor="var(--lab-border-strong)"

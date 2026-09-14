@@ -15,6 +15,7 @@ type AppShellProps = {
 const primaryNav = [
   { label: "Início", href: "/" },
   { label: "Fluxos", href: "/fluxos" },
+  { label: "Projetos", href: "/projetos" },
   { label: "Biblioteca", href: "/biblioteca" },
   { label: "Conexões", href: "/conexoes" },
 ];
