@@ -1,6 +1,4 @@
-import "server-only";
-
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import type { Prisma } from "@prisma/client";
 
