@@ -1,6 +1,6 @@
 import { loadEnvConfig } from "@next/env";
 
-import { getStagingReadiness, type StagingReadiness } from "@/lib/provider-connections/staging-readiness";
+import type { StagingReadiness } from "@/lib/provider-connections/staging-readiness";
 
 loadEnvConfig(process.cwd());
 
@@ -26,6 +26,8 @@ export function formatStagingReadinessReport(readiness: StagingReadiness) {
 }
 
 export async function main() {
+  process.env.LABIA_SAFE_PREFLIGHT = "1";
+  const { getStagingReadiness } = await import("@/lib/provider-connections/staging-readiness");
   const readiness = await getStagingReadiness();
   process.stdout.write(`${formatStagingReadinessReport(readiness)}\n`);
   if (!readiness.executionAllowed) process.exitCode = 1;

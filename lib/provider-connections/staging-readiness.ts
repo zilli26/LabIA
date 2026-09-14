@@ -1,5 +1,3 @@
-import "server-only";
-
 import { prisma } from "@/lib/db/prisma";
 import { executorHeartbeatTtlMs, isExecutorHeartbeatFresh } from "@/lib/provider-connections/heartbeat";
 import { getLocalOwnerId } from "@/lib/provider-connections/security";
