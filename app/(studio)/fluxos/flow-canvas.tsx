@@ -34,6 +34,7 @@ import {
   Play,
   Plus,
   Save,
+  Search,
   StickyNote,
   UploadCloud,
 } from "lucide-react";
@@ -298,6 +299,8 @@ const compatibilityActions: CreateAction[] = [
   },
 ];
 
+const priorityCreateActionIds = new Set(["import-base-image", "project-assets"]);
+
 const assetInputDefinition: SerializableNodeDefinition = {
   type: "asset-input",
   label: "Asset importado",
@@ -317,6 +320,52 @@ type CanvasProjectAsset = {
 };
 
 type PendingProjectAction = "import-base-image" | "project-assets" | null;
+
+function CreateActionButton({
+  action,
+  onSelect,
+  disabled = false,
+  priority = false,
+}: {
+  action: CreateAction;
+  onSelect: (action: CreateAction) => void;
+  disabled?: boolean;
+  priority?: boolean;
+}) {
+  const Icon = action.icon;
+
+  return (
+    <button
+      type="button"
+      data-action={action.id}
+      data-priority={priority ? "true" : undefined}
+      disabled={disabled}
+      onClick={() => onSelect(action)}
+      className={cn(
+        "group flex min-w-0 items-center gap-2.5 rounded-control border border-lab-border bg-lab-surface-2 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus disabled:cursor-wait disabled:opacity-60",
+        priority ? "p-2.5" : "p-2",
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright",
+          priority && "border-lab-border-strong text-lab-reagent",
+        )}
+      >
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-lab-text">{action.label}</span>
+        <span className="block truncate text-[11px] leading-4 text-lab-text-muted">
+          {action.description}
+        </span>
+      </span>
+      {action.id !== "project-assets" ? (
+        <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+      ) : null}
+    </button>
+  );
+}
 
 function formatBrl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -569,6 +618,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [isRunning, setIsRunning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [isNodeMenuOpen, setIsNodeMenuOpen] = useState(false);
+  const [createSearch, setCreateSearch] = useState("");
   const [isImportingAsset, setIsImportingAsset] = useState(false);
   const [isProjectAssetPickerOpen, setIsProjectAssetPickerOpen] = useState(false);
   const [projectAssets, setProjectAssets] = useState<CanvasProjectAsset[]>([]);
@@ -596,6 +646,43 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const { fitView, getViewport, screenToFlowPosition, setViewport } =
     useReactFlow<LabFlowNode, Edge>();
+  const normalizedCreateSearch = createSearch.trim().toLocaleLowerCase("pt-BR");
+  const matchesCreateSearch = useCallback(
+    (action: CreateAction) =>
+      !normalizedCreateSearch ||
+      `${action.label} ${action.description}`
+        .toLocaleLowerCase("pt-BR")
+        .includes(normalizedCreateSearch),
+    [normalizedCreateSearch],
+  );
+  const priorityCreateActions = useMemo(
+    () =>
+      createActionSections
+        .flatMap((section) => section.actions)
+        .filter((action) => priorityCreateActionIds.has(action.id) && matchesCreateSearch(action)),
+    [matchesCreateSearch],
+  );
+  const visibleCreateSections = useMemo(
+    () =>
+      createActionSections
+        .map((section) => ({
+          ...section,
+          actions: section.actions.filter(
+            (action) =>
+              !priorityCreateActionIds.has(action.id) && matchesCreateSearch(action),
+          ),
+        }))
+        .filter(
+          (section) =>
+            section.actions.length > 0 ||
+            (section.label === "Direção" && !normalizedCreateSearch),
+        ),
+    [matchesCreateSearch, normalizedCreateSearch],
+  );
+  const visibleCompatibilityActions = useMemo(
+    () => compatibilityActions.filter(matchesCreateSearch),
+    [matchesCreateSearch],
+  );
   const nodesWithExtendDepth = useMemo(
     () =>
       nodes.map((node) => {
@@ -1536,82 +1623,97 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           {isNodeMenuOpen ? (
             <div
               data-testid="create-menu"
-              className="mt-2 max-h-[calc(100vh-7rem)] w-80 overflow-y-auto rounded-control border border-lab-border bg-lab-surface-1 p-2 shadow-none"
+              data-menu-scroll="true"
+              className="mt-2 flex max-h-[calc(100dvh-5rem)] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-y-auto overscroll-contain rounded-control border border-lab-border bg-lab-surface-1 p-2 shadow-none"
             >
-              {createActionSections.map((section) => (
-                <div key={section.label} className="mb-3 last:mb-0">
-                  <div className="px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
+              <label className="sticky top-0 z-10 mb-2 flex shrink-0 items-center gap-2 rounded-control border border-lab-border bg-lab-surface-2 px-2.5 py-2 focus-within:border-lab-border-strong">
+                <Search className="size-4 shrink-0 text-lab-text-muted" />
+                <span className="sr-only">Buscar ações</span>
+                <input
+                  data-testid="create-search"
+                  type="search"
+                  value={createSearch}
+                  onChange={(event) => setCreateSearch(event.target.value)}
+                  placeholder="Buscar ações"
+                  aria-label="Buscar ações"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-lab-text outline-none placeholder:text-lab-text-muted"
+                />
+              </label>
+
+              {priorityCreateActions.length > 0 ? (
+                <div className="mb-2 border-b border-lab-border pb-2">
+                  <div className="px-1 pb-1 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
+                    Entrada do Projeto
+                  </div>
+                  <div className="grid gap-1.5">
+                    {priorityCreateActions.map((action) => (
+                      <CreateActionButton
+                        key={action.id}
+                        action={action}
+                        priority
+                        disabled={action.id === "import-base-image" && isImportingAsset}
+                        onSelect={(selectedAction) => {
+                          if (selectedAction.id === "import-base-image") {
+                            handleImportBaseImage();
+                          } else {
+                            void openProjectAssetPicker();
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {visibleCreateSections.map((section) => (
+                <div key={section.label} className="mb-2 last:mb-0">
+                  <div className="px-1 pb-1 pt-1 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
                     {section.label}
                   </div>
                   {section.actions.length > 0 ? (
-                    <div className="grid gap-2">
-                      {section.actions.map((action) => {
-                        const Icon = action.icon;
-
-                        return (
-                          <button
-                            key={action.id}
-                            type="button"
-                            data-action={action.id}
-                            disabled={action.id === "import-base-image" && isImportingAsset}
-                            onClick={() => {
-                              if (action.id === "import-base-image") {
-                                handleImportBaseImage();
-                              } else if (action.id === "project-assets") {
-                                void openProjectAssetPicker();
-                              } else {
-                                handleAddNode(createActionDefinition(action));
-                              }
-                            }}
-                            className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus disabled:cursor-wait disabled:opacity-60"
-                          >
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
-                              <Icon className="size-4" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-medium text-lab-text">
-                                {action.label}
-                              </span>
-                              <span className="block truncate text-xs text-lab-text-muted">
-                                {action.description}
-                              </span>
-                            </span>
-                            {action.id !== "project-assets" ? (
-                              <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
-                            ) : null}
-                          </button>
-                        );
-                      })}
+                    <div className="grid gap-1.5">
+                      {section.actions.map((action) => (
+                        <CreateActionButton
+                          key={action.id}
+                          action={action}
+                          onSelect={(selectedAction) =>
+                            handleAddNode(createActionDefinition(selectedAction))
+                          }
+                        />
+                      ))}
                     </div>
                   ) : (
-                    <p className="px-2 py-1 text-xs text-lab-text-muted">
+                    <p className="px-1 py-1 text-[11px] leading-4 text-lab-text-muted">
                       Director — indisponível até haver executor de texto comprovado.
                     </p>
                   )}
                 </div>
               ))}
 
-              <div className="mb-2 px-2 pt-1 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
-                Mais ferramentas
-              </div>
-              <div className="grid gap-2">
-                {compatibilityActions.map((action) => {
-                  const Icon = action.icon;
+              {visibleCompatibilityActions.length > 0 ? (
+                <div className="mb-2 last:mb-0">
+                  <div className="px-1 pb-1 pt-1 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
+                    Mais ferramentas
+                  </div>
+                  <div className="grid gap-1.5">
+                    {visibleCompatibilityActions.map((action) => (
+                      <CreateActionButton
+                        key={action.id}
+                        action={action}
+                        onSelect={(selectedAction) =>
+                          handleAddNode(createActionDefinition(selectedAction))
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
-                  return (
-                    <button
-                      key={action.id}
-                      type="button"
-                      data-action={action.id}
-                      onClick={() => handleAddNode(createActionDefinition(action))}
-                      className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
-                    >
-                      <Icon className="size-4 text-lab-text-dim" />
-                      <span className="text-sm font-medium text-lab-text">{action.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              {priorityCreateActions.length === 0 &&
+              visibleCreateSections.length === 0 &&
+              visibleCompatibilityActions.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-lab-text-muted">Nenhuma ação encontrada.</p>
+              ) : null}
 
               {pendingProjectAction ? (
                 <div

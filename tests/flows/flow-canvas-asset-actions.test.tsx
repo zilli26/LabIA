@@ -253,6 +253,37 @@ describe("ações de Asset no canvas do Flow", () => {
     await act(async () => root.unmount());
   });
 
+  it("mantém busca, entradas prioritárias visíveis e menu rolável no viewport", async () => {
+    setupFetch();
+    const { container, root } = await renderCanvas();
+    await click(container.querySelector('[aria-label="Criar"]')!);
+
+    const menu = container.querySelector<HTMLElement>('[data-testid="create-menu"]');
+    const search = menu?.querySelector<HTMLInputElement>('[data-testid="create-search"]');
+
+    expect(search).not.toBeNull();
+    expect(search?.type).toBe("search");
+    expect(search?.getAttribute("placeholder")).toBe("Buscar ações");
+
+    const actionIds = Array.from(menu?.querySelectorAll<HTMLElement>("[data-action]") ?? [])
+      .map((action) => action.dataset.action);
+    expect(actionIds.slice(0, 2)).toEqual(["import-base-image", "project-assets"]);
+    expect(menu?.className).toContain("overflow-y-auto");
+    expect(menu?.className).toContain("overscroll-contain");
+    expect(menu?.className).toContain("100dvh");
+
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      valueSetter?.call(search, "imagem-base");
+      search?.dispatchEvent(new Event("input", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(menu?.textContent).toContain("Importar imagem-base");
+    expect(menu?.textContent).not.toContain("Gerar imagem");
+
+    await act(async () => root.unmount());
+  });
+
   it("abre Assets do Projeto e adiciona o Asset selecionado no nó", async () => {
     setupFetch();
     const { container, root } = await renderCanvas();
