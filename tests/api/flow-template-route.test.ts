@@ -39,6 +39,21 @@ describe("POST /api/flows templates", () => {
     );
   });
 
+  it("creates the imported product to short video template server-side", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/flows", {
+        method: "POST",
+        body: JSON.stringify({ template: "product-imported-to-video" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.createFlow).toHaveBeenCalledWith(
+      "Produto importado → Vídeo curto",
+      "product-imported-to-video",
+    );
+  });
+
   it("rejects unknown template keys without creating a Flow", async () => {
     const response = await POST(
       new Request("http://localhost/api/flows", {

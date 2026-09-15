@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type FlowTemplate = "image-to-video" | "image-only";
+type FlowTemplate = "image-to-video" | "image-only" | "product-imported-to-video";
 
 const templates: Array<{ id: FlowTemplate; title: string; description: string; primary?: boolean }> = [
   {
@@ -21,6 +21,11 @@ const templates: Array<{ id: FlowTemplate; title: string; description: string; p
     id: "image-only",
     title: "Imagem-base",
     description: "Comece com um fluxo de imagem e edite a receita no canvas.",
+  },
+  {
+    id: "product-imported-to-video",
+    title: "Produto importado → Vídeo curto",
+    description: "Começa com uma imagem-base do Projeto e não gera imagem automaticamente.",
   },
 ];
 

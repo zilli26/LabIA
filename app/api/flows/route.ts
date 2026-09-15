@@ -7,9 +7,15 @@ import {
   listRecentFlows,
   parseStoredFlowGraph,
 } from "@/lib/db/flows";
-import type { FlowTemplateId } from "@/lib/flows/templates";
+import type { FlowTemplateId, ProductFlowTemplateId } from "@/lib/flows/templates";
 
 export const dynamic = "force-dynamic";
+
+type AcceptedFlowTemplateId = FlowTemplateId | ProductFlowTemplateId;
+
+function isAcceptedFlowTemplate(value: unknown): value is AcceptedFlowTemplateId {
+  return value === "image-to-video" || value === "image-only" || value === "product-imported-to-video";
+}
 
 export async function GET() {
   if (!hasDatabaseEnv()) {
@@ -63,16 +69,18 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as { template?: unknown };
     const template = body.template;
-    const templateNames: Record<FlowTemplateId, string> = {
+    const templateNames: Record<AcceptedFlowTemplateId, string> = {
       "image-to-video": "Imagem-base → Vídeo curto",
       "image-only": "Imagem-base",
+      "product-imported-to-video": "Produto importado → Vídeo curto",
     };
-    if (template !== undefined && template !== "image-to-video" && template !== "image-only") {
+    const acceptedTemplate = isAcceptedFlowTemplate(template) ? template : undefined;
+    if (template !== undefined && acceptedTemplate === undefined) {
       return NextResponse.json({ error: "Template de fluxo inválido." }, { status: 400 });
     }
     const flow = await createFlow(
-      template === undefined ? undefined : templateNames[template],
-      template,
+      acceptedTemplate === undefined ? undefined : templateNames[acceptedTemplate],
+      acceptedTemplate as FlowTemplateId | undefined,
     );
 
     return NextResponse.json(

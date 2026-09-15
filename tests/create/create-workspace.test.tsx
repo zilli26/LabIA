@@ -95,4 +95,42 @@ describe("CreateWorkspace template launcher", () => {
 
     await act(async () => root.unmount());
   });
+
+  it("exposes the imported product to short video path without implicit image generation", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ flow: { id: "flow-product-video-1" } }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<CreateWorkspace />));
+
+    const productVideo = container.querySelector<HTMLButtonElement>(
+      '[data-template="product-imported-to-video"]',
+    );
+    expect(productVideo).not.toBeNull();
+    expect(productVideo?.getAttribute("aria-checked")).toBe("false");
+    expect(container.textContent).toContain("Produto importado → Vídeo curto");
+    expect(container.textContent).toContain("Começa com uma imagem-base do Projeto");
+    expect(container.textContent).toContain("não gera imagem automaticamente");
+
+    await act(async () => productVideo?.click());
+    expect(productVideo?.getAttribute("aria-checked")).toBe("true");
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-id="create-template"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/flows",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ template: "product-imported-to-video" }),
+      }),
+    );
+    expect(router.push).toHaveBeenCalledWith("/fluxos/flow-product-video-1");
+
+    await act(async () => root.unmount());
+  });
 });
