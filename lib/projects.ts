@@ -26,6 +26,13 @@ export type CreateProjectInput = {
   flowTemplate?: ProjectFlowTemplateId;
 };
 
+export type CreateProjectForFlowInput = {
+  flowId: string;
+  scope: ProjectScope;
+  name: string;
+  objective?: string;
+};
+
 const projectInclude = {
   primaryFlow: { select: { id: true, name: true } },
   _count: { select: { flows: true, assets: true } },
@@ -65,6 +72,81 @@ export async function createProject(input: CreateProjectInput) {
       data: { primaryFlowId: flow.id },
       include: createdProjectInclude,
     });
+  });
+}
+
+export async function createProjectForFlow({
+  flowId,
+  scope,
+  name,
+  objective,
+}: CreateProjectForFlowInput) {
+  return prisma.$transaction(async (tx) => {
+    const flow = await tx.flow.findFirst({
+      where: { id: flowId, workspaceId: scope.workspaceId },
+      select: { id: true, name: true, projectId: true, graph: true },
+    });
+
+    if (!flow) return null;
+
+    if (flow.projectId) {
+      const existingProject = await tx.project.findFirst({
+        where: { id: flow.projectId, workspaceId: scope.workspaceId },
+        include: createdProjectInclude,
+      });
+      if (!existingProject) throw new Error("O Flow aponta para um Projeto inexistente.");
+
+      return {
+        project: {
+          id: existingProject.id,
+          name: existingProject.name,
+          primaryFlowId: existingProject.primaryFlowId,
+        },
+        flow: {
+          id: flow.id,
+          projectId: flow.projectId,
+          graph: flow.graph,
+        },
+      };
+    }
+
+    const project = await tx.project.create({
+      data: {
+        workspaceId: scope.workspaceId,
+        name,
+        type: "VIDEO",
+        objective: objective?.trim() || "Organizar a produção deste Flow.",
+        aspectRatio: "9:16",
+        durationSeconds: 5,
+        status: "DRAFT",
+      },
+    });
+    const linked = await tx.flow.updateMany({
+      where: { id: flow.id, workspaceId: scope.workspaceId, projectId: null },
+      data: { projectId: project.id },
+    });
+
+    if (linked.count !== 1) {
+      throw new Error("O Flow foi alterado antes da vinculação ao Projeto.");
+    }
+
+    await tx.project.update({
+      where: { id: project.id },
+      data: { primaryFlowId: flow.id },
+    });
+
+    return {
+      project: {
+        id: project.id,
+        name: project.name,
+        primaryFlowId: flow.id,
+      },
+      flow: {
+        id: flow.id,
+        projectId: project.id,
+        graph: flow.graph,
+      },
+    };
   });
 }
 

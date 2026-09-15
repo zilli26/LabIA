@@ -98,7 +98,7 @@ function definitions() {
   }));
 }
 
-function setupFetch() {
+function setupFetch({ projectId = "project-1" }: { projectId?: string | null } = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
@@ -107,7 +107,7 @@ function setupFetch() {
         flow: {
           id: flowId,
           name: "Flow do Projeto",
-          projectId: "project-1",
+          projectId,
           graph: { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
           updatedAt: "2026-09-15T00:00:00.000Z",
         },
@@ -131,6 +131,21 @@ function setupFetch() {
         },
         201,
       );
+    }
+
+    if (url === `/api/flows/${flowId}/project` && init?.method === "POST") {
+      return jsonResponse({
+        project: {
+          id: "project-1",
+          name: "Flow sem Projeto",
+          primaryFlowId: flowId,
+        },
+        flow: {
+          id: flowId,
+          projectId: "project-1",
+          graph: { nodes: [], edges: [] },
+        },
+      }, 201);
     }
 
     if (url === "/api/projects/project-1/assets") {
@@ -248,6 +263,50 @@ describe("ações de Asset no canvas do Flow", () => {
     await click(container.querySelector('[data-asset-option="asset-existing"]')!);
 
     expect(container.querySelector('[data-kind="asset-input"]')).not.toBeNull();
+    expect(container.querySelector('[data-asset-id="asset-existing"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it("oferece criar Projeto para Flow legado e retoma a importação", async () => {
+    const fetchMock = setupFetch({ projectId: null });
+    const { container, root } = await renderCanvas();
+
+    await click(container.querySelector('[aria-label="Criar"]')!);
+    await click(container.querySelector('[data-action="import-base-image"]')!);
+
+    expect(container.textContent).toContain("Criar Projeto para este Flow");
+    const projectName = container.querySelector<HTMLInputElement>("[name=flow-project-name]");
+    expect(projectName?.value).toBe("Flow do Projeto");
+
+    await click(container.querySelector('[data-action="create-project-for-flow"]')!);
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]');
+    const file = new File(["png bytes"], "produto.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", { configurable: true, value: [file] });
+    await act(async () => {
+      fileInput!.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 75));
+    });
+
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url) === `/api/flows/${flowId}/project` && init?.method === "POST")).toBe(true);
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url) === "/api/projects/project-1/assets" && init?.method === "POST")).toBe(true);
+    expect(container.querySelector('[data-asset-id="asset-uploaded"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it("oferece criar Projeto para Flow legado e retoma o picker", async () => {
+    setupFetch({ projectId: null });
+    const { container, root } = await renderCanvas();
+
+    await click(container.querySelector('[aria-label="Criar"]')!);
+    await click(container.querySelector('[data-action="project-assets"]')!);
+    expect(container.textContent).toContain("Criar Projeto para este Flow");
+
+    await click(container.querySelector('[data-action="create-project-for-flow"]')!);
+
+    expect(container.textContent).toContain("asset-existing");
+    await click(container.querySelector('[data-asset-option="asset-existing"]')!);
     expect(container.querySelector('[data-asset-id="asset-existing"]')).not.toBeNull();
 
     await act(async () => root.unmount());

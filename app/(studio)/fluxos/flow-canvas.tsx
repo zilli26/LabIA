@@ -316,6 +316,8 @@ type CanvasProjectAsset = {
   projectRole?: string;
 };
 
+type PendingProjectAction = "import-base-image" | "project-assets" | null;
+
 function formatBrl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -571,6 +573,11 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [isProjectAssetPickerOpen, setIsProjectAssetPickerOpen] = useState(false);
   const [projectAssets, setProjectAssets] = useState<CanvasProjectAsset[]>([]);
   const [projectAssetsError, setProjectAssetsError] = useState<string | null>(null);
+  const [pendingProjectAction, setPendingProjectAction] = useState<PendingProjectAction>(null);
+  const [isCreatingProjectForFlow, setIsCreatingProjectForFlow] = useState(false);
+  const [flowProjectName, setFlowProjectName] = useState("");
+  const [flowProjectObjective, setFlowProjectObjective] = useState("");
+  const [flowProjectError, setFlowProjectError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
   const [costLabel, setCostLabel] = useState("~R$ 0,00");
@@ -1076,18 +1083,18 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     [flowProjectId, screenToFlowPosition, setNodes],
   );
 
-  const openProjectAssetPicker = useCallback(async () => {
-    if (!flowProjectId) {
-      setProjectAssetsError("Este Flow ainda não está vinculado a um Projeto.");
-      setIsProjectAssetPickerOpen(true);
-      return;
-    }
-
+  const requestProjectForFlow = useCallback((action: Exclude<PendingProjectAction, null>) => {
+    setPendingProjectAction(action);
+    setFlowProjectName(flowName.trim() || "Novo Projeto");
+    setFlowProjectObjective("");
+    setFlowProjectError(null);
     setProjectAssetsError(null);
-    setIsProjectAssetPickerOpen(true);
+    setIsProjectAssetPickerOpen(action === "project-assets");
+  }, [flowName]);
 
+  const loadProjectAssets = useCallback(async (projectId: string) => {
     try {
-      const response = await fetch(`/api/projects/${flowProjectId}/assets`, {
+      const response = await fetch(`/api/projects/${projectId}/assets`, {
         cache: "no-store",
       });
       const payload = (await response.json()) as {
@@ -1111,16 +1118,79 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           : "Não foi possível carregar os Assets do Projeto.",
       );
     }
-  }, [flowProjectId]);
+  }, []);
+
+  const openProjectAssetPicker = useCallback(async () => {
+    if (!flowProjectId) {
+      requestProjectForFlow("project-assets");
+      return;
+    }
+
+    setProjectAssetsError(null);
+    setIsProjectAssetPickerOpen(true);
+    await loadProjectAssets(flowProjectId);
+  }, [flowProjectId, loadProjectAssets, requestProjectForFlow]);
 
   const handleImportBaseImage = useCallback(() => {
     if (!flowProjectId) {
-      setErrorMessage("Este Flow ainda não está vinculado a um Projeto.");
+      requestProjectForFlow("import-base-image");
       return;
     }
 
     assetFileInputRef.current?.click();
-  }, [flowProjectId]);
+  }, [flowProjectId, requestProjectForFlow]);
+
+  const handleCreateProjectForFlow = useCallback(async () => {
+    const name = flowProjectName.trim();
+    if (!name) {
+      setFlowProjectError("Informe um nome para o Projeto.");
+      return;
+    }
+
+    setIsCreatingProjectForFlow(true);
+    setFlowProjectError(null);
+
+    try {
+      const response = await fetch(`/api/flows/${flowId}/project`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          objective: flowProjectObjective.trim(),
+        }),
+      });
+      const payload = (await response.json()) as {
+        project?: { id?: string };
+        flow?: { projectId?: string };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.flow?.projectId) {
+        throw new Error(payload.error ?? "Não foi possível criar o Projeto para este Flow.");
+      }
+
+      const projectId = payload.flow.projectId;
+      const nextAction = pendingProjectAction;
+      setFlowProjectId(projectId);
+      setPendingProjectAction(null);
+      setFlowProjectError(null);
+
+      if (nextAction === "import-base-image") {
+        window.setTimeout(() => assetFileInputRef.current?.click(), 0);
+      } else if (nextAction === "project-assets") {
+        setIsProjectAssetPickerOpen(true);
+        await loadProjectAssets(projectId);
+      }
+    } catch (error) {
+      setFlowProjectError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível criar o Projeto para este Flow.",
+      );
+    } finally {
+      setIsCreatingProjectForFlow(false);
+    }
+  }, [flowId, flowProjectName, flowProjectObjective, loadProjectAssets, pendingProjectAction]);
 
   const handleBaseImageFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1542,6 +1612,53 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
                   );
                 })}
               </div>
+
+              {pendingProjectAction ? (
+                <div
+                  data-testid="flow-project-link-panel"
+                  className="mt-3 border-t border-lab-border px-2 pt-3"
+                >
+                  <p className="text-xs leading-5 text-lab-text-dim">
+                    Este Flow ainda não está vinculado a um Projeto. Crie a casa deste trabalho para continuar.
+                  </p>
+                  <label className="mt-3 grid gap-1 text-xs text-lab-text" htmlFor="flow-project-name">
+                    Nome do Projeto
+                    <input
+                      id="flow-project-name"
+                      name="flow-project-name"
+                      value={flowProjectName}
+                      onChange={(event) => setFlowProjectName(event.target.value)}
+                      required
+                      className="lab-ghost-input"
+                    />
+                  </label>
+                  <label className="mt-2 grid gap-1 text-xs text-lab-text" htmlFor="flow-project-objective">
+                    Objetivo do Projeto <span className="text-lab-text-muted">opcional</span>
+                    <textarea
+                      id="flow-project-objective"
+                      name="flow-project-objective"
+                      value={flowProjectObjective}
+                      onChange={(event) => setFlowProjectObjective(event.target.value)}
+                      rows={2}
+                      className="lab-ghost-input min-h-14 resize-y"
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    data-action="create-project-for-flow"
+                    onClick={() => void handleCreateProjectForFlow()}
+                    disabled={isCreatingProjectForFlow}
+                    className="mt-3 w-full"
+                  >
+                    {isCreatingProjectForFlow ? "Criando Projeto..." : "Criar Projeto para este Flow"}
+                  </Button>
+                  {flowProjectError ? (
+                    <p role="alert" className="mt-2 text-xs text-lab-danger">
+                      {flowProjectError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {isProjectAssetPickerOpen ? (
                 <div
