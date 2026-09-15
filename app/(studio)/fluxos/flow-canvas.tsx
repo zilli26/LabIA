@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import {
   addEdge,
   Background,
@@ -24,7 +31,6 @@ import {
   Image as ImageIcon,
   Loader2,
   MessageSquareText,
-  PenLine,
   Play,
   Plus,
   Save,
@@ -198,28 +204,117 @@ const fallbackAddableNodes: SerializableNodeDefinition[] = [
   },
 ];
 
-const upcomingNodes = [
-  {
-    label: "Copy da marca",
-    accent: "var(--lab-node-copy)",
-    icon: PenLine,
-  },
-];
+const paidVideoKindSet = new Set<string>(PAID_VIDEO_KINDS);
 
-const paletteSections: Array<{ label: string; kinds: LabNodeKind[] }> = [
+type CreateAction = {
+  id: string;
+  label: string;
+  description: string;
+  kind: LabNodeKind;
+  icon: typeof FileText;
+};
+
+const createActionSections: Array<{
+  label: string;
+  actions: CreateAction[];
+}> = [
   {
     label: "Criar",
-    kinds: ["text-input", "prompt", "image-generation", "video-generation", "text2video"],
+    actions: [
+      {
+        id: "prompt",
+        label: "Prompt",
+        description: "Escreva a intenção do próximo passo.",
+        kind: "prompt",
+        icon: MessageSquareText,
+      },
+      {
+        id: "image-generation",
+        label: "Gerar imagem",
+        description: "Crie uma imagem com custo visível.",
+        kind: "image-generation",
+        icon: ImageIcon,
+      },
+      {
+        id: "video-generation",
+        label: "Animar imagem",
+        description: "Transforme uma imagem em clipe.",
+        kind: "video-generation",
+        icon: Clapperboard,
+      },
+      {
+        id: "import-base-image",
+        label: "Importar imagem-base",
+        description: "Adicione JPG, PNG ou WebP ao Projeto.",
+        kind: "asset-input",
+        icon: UploadCloud,
+      },
+    ],
   },
-  { label: "Projeto", kinds: ["asset-input"] },
+  {
+    label: "Projeto",
+    actions: [
+      {
+        id: "project-assets",
+        label: "Assets do Projeto",
+        description: "Escolha uma fonte já importada.",
+        kind: "asset-input",
+        icon: UploadCloud,
+      },
+    ],
+  },
   {
     label: "Pós-produção",
-    kinds: ["video-extend", "video-assembly", "asset-output", "note"],
+    actions: [
+      {
+        id: "video-extend",
+        label: "Continuar clipe",
+        description: "Continue uma cena a partir do último frame.",
+        kind: "video-extend",
+        icon: Clapperboard,
+      },
+      {
+        id: "video-assembly",
+        label: "Juntar clipes",
+        description: "Feche um vídeo com várias cenas.",
+        kind: "video-assembly",
+        icon: Film,
+      },
+    ],
   },
-  { label: "Direção", kinds: [] },
+  {
+    label: "Direção",
+    actions: [],
+  },
 ];
 
-const paidVideoKindSet = new Set<string>(PAID_VIDEO_KINDS);
+const compatibilityActions: CreateAction[] = [
+  {
+    id: "note",
+    label: "Nota",
+    description: "Anotação livre no fluxo.",
+    kind: "note",
+    icon: StickyNote,
+  },
+];
+
+const assetInputDefinition: SerializableNodeDefinition = {
+  type: "asset-input",
+  label: "Asset importado",
+  description: "Conecte este Asset à entrada de Animar imagem.",
+  inputs: [],
+  outputs: [
+    { id: "image", label: "Imagem", type: "image" },
+    { id: "video", label: "Vídeo", type: "video" },
+  ],
+  ui: { componentKey: "labNode", kind: "asset-input" },
+};
+
+type CanvasProjectAsset = {
+  assetId: string;
+  type: string;
+  projectRole?: string;
+};
 
 function formatBrl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -305,6 +400,25 @@ function createNode(
       },
     },
   } satisfies LabFlowNode;
+}
+
+function createActionDefinition(action: CreateAction): SerializableNodeDefinition {
+  if (action.kind === "asset-input") {
+    return {
+      ...assetInputDefinition,
+      label: action.label,
+      description: action.description,
+    };
+  }
+
+  return {
+    type: action.kind,
+    label: action.label,
+    description: action.description,
+    inputs: [],
+    outputs: [],
+    ui: { componentKey: "labNode", kind: action.kind },
+  };
 }
 
 const NEW_NODE_WIDTH = 256;
@@ -453,7 +567,10 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [isRunning, setIsRunning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [isNodeMenuOpen, setIsNodeMenuOpen] = useState(false);
-  const [addableNodes, setAddableNodes] = useState(fallbackAddableNodes);
+  const [isImportingAsset, setIsImportingAsset] = useState(false);
+  const [isProjectAssetPickerOpen, setIsProjectAssetPickerOpen] = useState(false);
+  const [projectAssets, setProjectAssets] = useState<CanvasProjectAsset[]>([]);
+  const [projectAssetsError, setProjectAssetsError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
   const [costLabel, setCostLabel] = useState("~R$ 0,00");
@@ -466,6 +583,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   });
   const costConfirmRequestRef = useRef(0);
   const flowLoadedRef = useRef(false);
+  const assetFileInputRef = useRef<HTMLInputElement>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [flowProjectId, setFlowProjectId] = useState<string | undefined>();
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -518,25 +636,6 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
         };
       });
   }, [costConfirm.cost, nodes]);
-
-  useEffect(() => {
-    fetch("/api/flows/node-definitions", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { nodeDefinitions?: SerializableNodeDefinition[] } | null) => {
-        if (!payload?.nodeDefinitions) {
-          return;
-        }
-
-        setAddableNodes(
-          payload.nodeDefinitions.filter(
-            (definition) =>
-              definition.ui.componentKey === "labNode" &&
-              isLabNodeKind(definition.ui.kind),
-          ),
-        );
-      })
-      .catch(() => setAddableNodes(fallbackAddableNodes));
-  }, []);
 
   useEffect(() => {
     const markDirty = () => {
@@ -925,6 +1024,148 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     [flowProjectId, screenToFlowPosition, setNodes],
   );
 
+  const addProjectAssetNode = useCallback(
+    (asset: CanvasProjectAsset) => {
+      if (!flowProjectId) {
+        setErrorMessage("Este Flow ainda não está vinculado a um Projeto.");
+        return;
+      }
+
+      const definition = createActionDefinition({
+        id: "asset-input",
+        label: "Asset importado",
+        description: "Conecte este Asset à entrada de Animar imagem.",
+        kind: "asset-input",
+        icon: UploadCloud,
+      });
+      const anchor = screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      });
+
+      setNodes((currentNodes) => {
+        const node = createNode(
+          definition,
+          findFreeNodePosition(currentNodes, anchor),
+          flowProjectId,
+        );
+
+        return [
+          ...currentNodes,
+          {
+            ...node,
+            data: {
+              ...node.data,
+              params: {
+                ...(node.data.params ?? {}),
+                assetId: asset.assetId,
+                assetType: asset.type,
+                projectId: flowProjectId,
+                projectRole: asset.projectRole ?? "source",
+                pending: false,
+              },
+            },
+          },
+        ];
+      });
+      setIsDirty(true);
+      setRunMessage(null);
+      setIsNodeMenuOpen(false);
+      setIsProjectAssetPickerOpen(false);
+    },
+    [flowProjectId, screenToFlowPosition, setNodes],
+  );
+
+  const openProjectAssetPicker = useCallback(async () => {
+    if (!flowProjectId) {
+      setProjectAssetsError("Este Flow ainda não está vinculado a um Projeto.");
+      setIsProjectAssetPickerOpen(true);
+      return;
+    }
+
+    setProjectAssetsError(null);
+    setIsProjectAssetPickerOpen(true);
+
+    try {
+      const response = await fetch(`/api/projects/${flowProjectId}/assets`, {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as {
+        assets?: CanvasProjectAsset[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Não foi possível carregar os Assets do Projeto.");
+      }
+
+      setProjectAssets(
+        (payload.assets ?? []).filter((asset) =>
+          ["IMAGE", "VIDEO"].includes(asset.type.toUpperCase()),
+        ),
+      );
+    } catch (error) {
+      setProjectAssetsError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar os Assets do Projeto.",
+      );
+    }
+  }, [flowProjectId]);
+
+  const handleImportBaseImage = useCallback(() => {
+    if (!flowProjectId) {
+      setErrorMessage("Este Flow ainda não está vinculado a um Projeto.");
+      return;
+    }
+
+    assetFileInputRef.current?.click();
+  }, [flowProjectId]);
+
+  const handleBaseImageFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      input.value = "";
+
+      if (!file || !flowProjectId) {
+        return;
+      }
+
+      setIsImportingAsset(true);
+      setErrorMessage(null);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("role", "source");
+        const response = await fetch(`/api/projects/${flowProjectId}/assets`, {
+          method: "POST",
+          body: formData,
+        });
+        const payload = (await response.json()) as {
+          asset?: CanvasProjectAsset;
+          error?: string;
+        };
+
+        if (!response.ok || !payload.asset?.assetId) {
+          throw new Error(payload.error ?? "Não foi possível importar a imagem-base.");
+        }
+
+        addProjectAssetNode(payload.asset);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível importar a imagem-base.",
+        );
+      } finally {
+        setIsImportingAsset(false);
+      }
+    },
+    [addProjectAssetNode, flowProjectId],
+  );
+
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     setErrorMessage(null);
@@ -1214,90 +1455,141 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           <Button
             type="button"
             onClick={() => setIsNodeMenuOpen((current) => !current)}
+            aria-label="Criar"
             aria-expanded={isNodeMenuOpen}
             variant="secondary"
           >
             <Plus />
-            Nó
+            Criar
           </Button>
 
           {isNodeMenuOpen ? (
-            <div className="mt-2 w-72 rounded-control border border-lab-border bg-lab-surface-1 p-2 shadow-none">
-              {paletteSections.map((section) => {
-                const sectionNodes = addableNodes.filter((node) =>
-                  section.kinds.includes(node.ui.kind as LabNodeKind),
-                );
-
-                return (
-                  <div key={section.label} className="mb-3 last:mb-0">
-                    <div className="px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
-                      {section.label}
-                    </div>
-                    {sectionNodes.length > 0 ? (
-                      <div className="grid gap-2">
-                        {sectionNodes.map((node) => {
-                          const kind = isLabNodeKind(node.ui.kind) ? node.ui.kind : "note";
-                          const Icon = nodeIcons[kind];
-
-                          return (
-                            <button
-                              key={node.type}
-                              type="button"
-                              onClick={() => handleAddNode(node)}
-                              className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
-                            >
-                              <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
-                                <Icon className="size-4" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block text-sm font-medium text-lab-text">
-                                  {node.label}
-                                </span>
-                                <span className="block truncate text-xs text-lab-text-muted">
-                                  {node.description}
-                                </span>
-                              </span>
-                              <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="px-2 py-1 text-xs text-lab-text-muted">
-                        Reservado para a próxima etapa.
-                      </p>
-                    )}
+            <div
+              data-testid="create-menu"
+              className="mt-2 max-h-[calc(100vh-7rem)] w-80 overflow-y-auto rounded-control border border-lab-border bg-lab-surface-1 p-2 shadow-none"
+            >
+              {createActionSections.map((section) => (
+                <div key={section.label} className="mb-3 last:mb-0">
+                  <div className="px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
+                    {section.label}
                   </div>
-                );
-              })}
+                  {section.actions.length > 0 ? (
+                    <div className="grid gap-2">
+                      {section.actions.map((action) => {
+                        const Icon = action.icon;
 
-              <div className="px-2 pb-2 pt-4 text-[11px] font-medium uppercase tracking-wider text-lab-text-muted">
-                Em breve
+                        return (
+                          <button
+                            key={action.id}
+                            type="button"
+                            data-action={action.id}
+                            disabled={action.id === "import-base-image" && isImportingAsset}
+                            onClick={() => {
+                              if (action.id === "import-base-image") {
+                                handleImportBaseImage();
+                              } else if (action.id === "project-assets") {
+                                void openProjectAssetPicker();
+                              } else {
+                                handleAddNode(createActionDefinition(action));
+                              }
+                            }}
+                            className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus disabled:cursor-wait disabled:opacity-60"
+                          >
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
+                              <Icon className="size-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-medium text-lab-text">
+                                {action.label}
+                              </span>
+                              <span className="block truncate text-xs text-lab-text-muted">
+                                {action.description}
+                              </span>
+                            </span>
+                            {action.id !== "project-assets" ? (
+                              <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="px-2 py-1 text-xs text-lab-text-muted">
+                      Director — indisponível até haver executor de texto comprovado.
+                    </p>
+                  )}
+                </div>
+              ))}
+
+              <div className="mb-2 px-2 pt-1 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
+                Mais ferramentas
               </div>
-              <div className="grid gap-1.5">
-                {upcomingNodes.map((node) => {
-                  const Icon = node.icon;
+              <div className="grid gap-2">
+                {compatibilityActions.map((action) => {
+                  const Icon = action.icon;
 
                   return (
-                    <div
-                      key={node.label}
-                      className="flex items-center gap-3 rounded-control border border-dashed border-lab-border/70 p-2.5 opacity-60"
+                    <button
+                      key={action.id}
+                      type="button"
+                      data-action={action.id}
+                      onClick={() => handleAddNode(createActionDefinition(action))}
+                      className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
                     >
-                      <span
-                        className="flex size-8 shrink-0 items-center justify-center rounded-control bg-lab-surface-2"
-                        style={{ color: node.accent }}
-                      >
-                        <Icon className="size-4" />
-                      </span>
-                      <span className="text-sm text-lab-text-dim">
-                        {node.label}
-                      </span>
-                    </div>
+                      <Icon className="size-4 text-lab-text-dim" />
+                      <span className="text-sm font-medium text-lab-text">{action.label}</span>
+                    </button>
                   );
                 })}
               </div>
+
+              {isProjectAssetPickerOpen ? (
+                <div
+                  data-testid="project-asset-picker"
+                  className="mt-3 border-t border-lab-border px-2 pt-3"
+                >
+                  <div className="mb-2 text-xs font-medium text-lab-text">
+                    Escolha um Asset de imagem ou vídeo
+                  </div>
+                  {projectAssetsError ? (
+                    <p role="alert" className="text-xs text-lab-danger">
+                      {projectAssetsError}
+                    </p>
+                  ) : projectAssets.length > 0 ? (
+                    <div className="grid gap-1.5">
+                      {projectAssets.map((asset) => (
+                        <button
+                          key={asset.assetId}
+                          type="button"
+                          data-asset-option={asset.assetId}
+                          onClick={() => addProjectAssetNode(asset)}
+                          className="rounded-control border border-lab-border bg-lab-surface-2 px-3 py-2 text-left text-xs text-lab-text transition-colors hover:border-lab-border-strong focus-visible:outline-none focus-visible:shadow-lab-focus"
+                        >
+                          <span className="block font-medium">{asset.assetId}</span>
+                          <span className="block text-lab-text-muted">
+                            {asset.type === "VIDEO" ? "Vídeo" : "Imagem"} · fonte do Projeto
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-lab-text-muted">
+                      Nenhum Asset de imagem ou vídeo disponível neste Projeto.
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
+
+          <input
+            ref={assetFileInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+            aria-label="Arquivo da imagem-base"
+            className="sr-only"
+            onChange={(event) => void handleBaseImageFileChange(event)}
+          />
         </div>
 
         {isEmpty ? (
