@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
 import {
@@ -8,6 +8,7 @@ import {
   Clapperboard,
   Film,
   FileText,
+  Images,
   MessageSquareText,
   StickyNote,
   UploadCloud,
@@ -32,6 +33,11 @@ const nodeMeta: Record<
     label: "texto",
     accent: "var(--lab-node-copy)",
     Icon: FileText,
+  },
+  "asset-input": {
+    label: "asset do projeto",
+    accent: "var(--lab-node-design)",
+    Icon: Images,
   },
   prompt: {
     label: "prompt",
@@ -353,6 +359,14 @@ function VideoControls({
       ) : null}
 
       {mode === "image" ? (
+        <details className="rounded-control border border-lab-border bg-lab-surface-1 px-2.5 py-2">
+          <summary className="cursor-pointer text-xs text-lab-text-dim">
+            Entrada legada (Avançado)
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p className="text-[11px] leading-5 text-lab-text-muted">
+              Prefira conectar um Asset importado do Projeto. URL arbitrária só mantém compatibilidade com flows legados.
+            </p>
         <label className="block">
           <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
             imagem de entrada
@@ -369,9 +383,11 @@ function VideoControls({
               updateParams({ image_url: event.target.value || undefined })
             }
             placeholder="URL de asset, se não houver nó conectado"
-            className="nodrag nowheel h-9 w-full rounded-control border border-lab-border bg-lab-surface-1 px-2 font-mono text-xs text-lab-text outline-none transition-colors placeholder:text-lab-text-muted focus:border-lab-border-strong focus:shadow-lab-focus"
+            className="nodrag nowheel h-9 w-full rounded-control border border-lab-border bg-lab-bg px-2 font-mono text-xs text-lab-text outline-none transition-colors placeholder:text-lab-text-muted focus:border-lab-border-strong focus:shadow-lab-focus"
           />
         </label>
+          </div>
+        </details>
       ) : null}
 
       {getString(params.generationId) && assetUrl ? (
@@ -395,6 +411,127 @@ function VideoControls({
       {getString(params.errorMessage) ? (
         <p className="rounded-control border border-lab-danger/40 bg-lab-surface-1 px-2 py-1.5 text-xs text-lab-danger">
           {getString(params.errorMessage)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+type ProjectAssetOption = {
+  assetId: string;
+  url: string;
+  type: string;
+  origin: string;
+  projectRole?: string;
+};
+
+function AssetInputControls({
+  params,
+  updateParams,
+}: {
+  params: Record<string, unknown>;
+  updateParams: (nextParams: Record<string, unknown>) => void;
+}) {
+  const projectId = getString(params.projectId);
+  const selectedAssetId = getString(params.assetId) ?? "";
+  const [assets, setAssets] = useState<ProjectAssetOption[]>([]);
+  const [loadError, setLoadError] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!projectId) {
+      setAssets([]);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(`/api/projects/${projectId}/assets`, { cache: "no-store" })
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => ({}))) as {
+          assets?: ProjectAssetOption[];
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Não foi possível carregar os Assets do Projeto.");
+        }
+        if (!cancelled) {
+          setAssets(
+            (payload.assets ?? []).filter((asset) =>
+              ["IMAGE", "VIDEO"].includes(asset.type),
+            ),
+          );
+          setLoadError(undefined);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : "Assets indisponíveis.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const selectedAsset = assets.find((asset) => asset.assetId === selectedAssetId);
+
+  return (
+    <div className="mt-3 space-y-3">
+      <label className="block">
+        <span className="mb-1 block font-mono text-[10px] uppercase text-lab-text-muted">
+          Asset do Projeto
+        </span>
+        <select
+          aria-label="Asset do Projeto"
+          value={selectedAssetId}
+          onChange={(event) => {
+            const asset = assets.find((item) => item.assetId === event.target.value);
+            updateParams({
+              assetId: asset?.assetId || undefined,
+              projectRole: asset?.projectRole || undefined,
+              assetType: asset?.type || undefined,
+              assetUrl: undefined,
+              pending: !asset,
+            });
+          }}
+          className="nodrag nowheel h-9 w-full rounded-control border border-lab-border bg-lab-surface-1 px-2 text-xs text-lab-text outline-none transition-colors focus:border-lab-border-strong focus:shadow-lab-focus"
+        >
+          <option value="">Selecione um Asset source</option>
+          {assets.map((asset) => (
+            <option key={asset.assetId} value={asset.assetId}>
+              {asset.projectRole === "reference" ? "Referência" : "Source"} · {asset.assetId}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="rounded-control border border-lab-border bg-lab-surface-1 px-2.5 py-2">
+        <div className="font-mono text-[11px] text-lab-reagent-bright">custo R$0,00</div>
+        <div className="mt-1 text-xs leading-5 text-lab-text-dim">
+          {selectedAsset
+            ? selectedAsset.projectRole === "reference"
+              ? "Referência visual: não vira primeiro frame."
+              : "Imagem-base selecionada para Animar imagem."
+            : projectId
+              ? "Selecione um Asset source importado no Projeto."
+              : "Este Flow ainda não está ligado a um Projeto."}
+        </div>
+      </div>
+
+      {selectedAsset ? (
+        <div className="overflow-hidden rounded-control border border-lab-border bg-lab-surface-1">
+          {selectedAsset.type === "VIDEO" ? (
+            <video src={selectedAsset.url} controls className="aspect-video w-full object-cover" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={selectedAsset.url} alt="Asset selecionado do Projeto" className="aspect-square w-full object-cover" />
+          )}
+        </div>
+      ) : null}
+
+      {loadError ? (
+        <p className="rounded-control border border-lab-danger/40 bg-lab-surface-1 px-2 py-1.5 text-xs text-lab-danger">
+          {loadError}
         </p>
       ) : null}
     </div>
@@ -622,6 +759,10 @@ export function LabFlowNodeComponent({
           />
         ) : null}
 
+        {data.kind === "asset-input" ? (
+          <AssetInputControls params={params} updateParams={updateParams} />
+        ) : null}
+
         {data.kind === "image-generation" ? (
           <div className="mt-3 space-y-3">
             <label className="block">
@@ -775,11 +916,28 @@ export function LabFlowNodeComponent({
         position={Position.Left}
         className="!left-[-5px]"
       />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!right-[-5px]"
-      />
+      {data.kind === "asset-input" ? (
+        <>
+          <Handle
+            id="image"
+            type="source"
+            position={Position.Right}
+            className="!right-[-5px] !top-[42%]"
+          />
+          <Handle
+            id="video"
+            type="source"
+            position={Position.Right}
+            className="!right-[-5px] !top-[58%]"
+          />
+        </>
+      ) : (
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!right-[-5px]"
+        />
+      )}
     </div>
   );
 }

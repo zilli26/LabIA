@@ -55,6 +55,7 @@ type FlowRecord = {
   name: string;
   graph: FlowGraph;
   updatedAt: string;
+  projectId?: string | null;
 };
 
 type FlowResponse = {
@@ -132,6 +133,7 @@ const nodeTypes = {
 
 const nodeIcons: Record<LabNodeKind, typeof FileText> = {
   "text-input": FileText,
+  "asset-input": UploadCloud,
   prompt: MessageSquareText,
   "image-generation": ImageIcon,
   "video-generation": Clapperboard,
@@ -158,6 +160,17 @@ const fallbackAddableNodes: SerializableNodeDefinition[] = [
     inputs: [],
     outputs: [],
     ui: { componentKey: "labNode", kind: "prompt" },
+  },
+  {
+    type: "asset-input",
+    label: "Asset importado",
+    description: "Selecione imagem ou vídeo já importado no Projeto.",
+    inputs: [],
+    outputs: [
+      { id: "image", label: "Imagem", type: "image" },
+      { id: "video", label: "Vídeo", type: "video" },
+    ],
+    ui: { componentKey: "labNode", kind: "asset-input" },
   },
   {
     type: "image-generation",
@@ -193,6 +206,19 @@ const upcomingNodes = [
   },
 ];
 
+const paletteSections: Array<{ label: string; kinds: LabNodeKind[] }> = [
+  {
+    label: "Criar",
+    kinds: ["text-input", "prompt", "image-generation", "video-generation", "text2video"],
+  },
+  { label: "Projeto", kinds: ["asset-input"] },
+  {
+    label: "Pós-produção",
+    kinds: ["video-extend", "video-assembly", "asset-output", "note"],
+  },
+  { label: "Direção", kinds: [] },
+];
+
 const paidVideoKindSet = new Set<string>(PAID_VIDEO_KINDS);
 
 function formatBrl(value: number) {
@@ -209,6 +235,10 @@ function isLabNodeKind(kind: string): kind is LabNodeKind {
 function getDefaultParams(kind: LabNodeKind) {
   if (kind === "prompt") {
     return { prompt: "" };
+  }
+
+  if (kind === "asset-input") {
+    return { assetId: "", projectRole: "source", pending: true };
   }
 
   if (kind === "image-generation") {
@@ -253,6 +283,7 @@ function getDefaultParams(kind: LabNodeKind) {
 function createNode(
   definition: SerializableNodeDefinition,
   position: { x: number; y: number },
+  projectId?: string,
 ) {
   const kind = isLabNodeKind(definition.ui.kind)
     ? definition.ui.kind
@@ -268,7 +299,10 @@ function createNode(
       title: definition.label ?? "Nó",
       description: definition.description ?? "Nó do fluxo.",
       status: "idle",
-      params: getDefaultParams(kind),
+      params: {
+        ...(getDefaultParams(kind) ?? {}),
+        ...(kind === "asset-input" && projectId ? { projectId } : {}),
+      },
     },
   } satisfies LabFlowNode;
 }
@@ -351,6 +385,65 @@ function getRecord(value: unknown) {
     : {};
 }
 
+export function getCanvasConnectionFeedback(
+  graph: FlowGraph,
+  connection: Connection,
+) {
+  if (!connection.source || !connection.target) {
+    return "Selecione origem e destino para conectar os nós.";
+  }
+
+  const sourceNode = graph.nodes.find((node) => node.id === connection.source);
+  const targetNode = graph.nodes.find((node) => node.id === connection.target);
+
+  if (!sourceNode || !targetNode) {
+    return "Nó de origem ou destino não existe no grafo.";
+  }
+
+  const sourceType = getCanvasPortType(
+    sourceNode.data.kind,
+    "source",
+    connection.sourceHandle,
+  );
+  const targetType = getCanvasPortType(
+    targetNode.data.kind,
+    "target",
+    connection.targetHandle,
+  );
+
+  if (!sourceType || !targetType) {
+    return "Porta de origem ou destino não existe.";
+  }
+
+  return sourceType === "any" || targetType === "any" || sourceType === targetType
+    ? null
+    : `Saída ${sourceType} não conecta em entrada ${targetType}.`;
+}
+
+function getCanvasPortType(
+  kind: LabNodeKind,
+  direction: "source" | "target",
+  handleId: string | null | undefined,
+) {
+  if (kind === "asset-input" && direction === "source") {
+    return handleId === "video" ? "video" : handleId === "image" ? "image" : undefined;
+  }
+
+  if (direction === "target") {
+    if (kind === "image-generation" || kind === "text2video") return "text";
+    if (kind === "video-generation") return "image";
+    if (kind === "video-extend" || kind === "video-assembly") return "video";
+    if (kind === "asset-output" || kind === "note") return "any";
+    return undefined;
+  }
+
+  if (kind === "text-input" || kind === "prompt") return "text";
+  if (kind === "image-generation") return "image";
+  if (kind === "video-generation" || kind === "video-extend" || kind === "video-assembly" || kind === "text2video") return "video";
+  if (kind === "note") return "any";
+  return undefined;
+}
+
 function FlowCanvasInner({ flowId }: { flowId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<LabFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -374,6 +467,8 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   const costConfirmRequestRef = useRef(0);
   const flowLoadedRef = useRef(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [flowProjectId, setFlowProjectId] = useState<string | undefined>();
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const { fitView, getViewport, screenToFlowPosition, setViewport } =
     useReactFlow<LabFlowNode, Edge>();
   const nodesWithExtendDepth = useMemo(
@@ -538,7 +633,23 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     const graph = payload.flow.graph;
 
     setFlowName(payload.flow.name);
-    setNodes(graph.nodes);
+    setFlowProjectId(payload.flow.projectId ?? undefined);
+    setNodes(
+      graph.nodes.map((node) =>
+        node.data.kind === "asset-input" && payload.flow.projectId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                params: {
+                  ...(node.data.params ?? {}),
+                  projectId: payload.flow.projectId,
+                },
+              },
+            }
+          : node,
+      ),
+    );
     setEdges(graph.edges);
     setIsDirty(false);
     flowLoadedRef.current = true;
@@ -761,6 +872,18 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      const feedback = getCanvasConnectionFeedback(
+        { nodes, edges },
+        connection,
+      );
+
+      if (feedback) {
+        setConnectionError(feedback);
+        setRunMessage(null);
+        return;
+      }
+
+      setConnectionError(null);
       setEdges((currentEdges) =>
         addEdge(
           {
@@ -777,7 +900,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       setIsDirty(true);
       setRunMessage(null);
     },
-    [setEdges],
+    [edges, nodes, setEdges],
   );
 
   const handleAddNode = useCallback(
@@ -789,13 +912,17 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
       setNodes((currentNodes) => [
         ...currentNodes,
-        createNode(definition, findFreeNodePosition(currentNodes, anchor)),
+        createNode(
+          definition,
+          findFreeNodePosition(currentNodes, anchor),
+          flowProjectId,
+        ),
       ]);
       setIsDirty(true);
       setRunMessage(null);
       setIsNodeMenuOpen(false);
     },
-    [screenToFlowPosition, setNodes],
+    [flowProjectId, screenToFlowPosition, setNodes],
   );
 
   const handleSave = useCallback(async () => {
@@ -1074,6 +1201,15 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           <Controls position="bottom-right" showInteractive={false} />
         </ReactFlow>
 
+        {connectionError ? (
+          <p
+            role="alert"
+            className="absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-control border border-lab-danger/50 bg-lab-surface-1 px-3 py-2 text-xs text-lab-danger shadow-none"
+          >
+            {connectionError}
+          </p>
+        ) : null}
+
         <div className="absolute left-4 top-4 z-20">
           <Button
             type="button"
@@ -1087,36 +1223,53 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
           {isNodeMenuOpen ? (
             <div className="mt-2 w-72 rounded-control border border-lab-border bg-lab-surface-1 p-2 shadow-none">
-              <div className="grid gap-2">
-                {addableNodes.map((node) => {
-                  const kind = isLabNodeKind(node.ui.kind)
-                    ? node.ui.kind
-                    : "note";
-                  const Icon = nodeIcons[kind];
+              {paletteSections.map((section) => {
+                const sectionNodes = addableNodes.filter((node) =>
+                  section.kinds.includes(node.ui.kind as LabNodeKind),
+                );
 
-                  return (
-                    <button
-                      key={node.type}
-                      type="button"
-                      onClick={() => handleAddNode(node)}
-                      className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
-                    >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
-                        <Icon className="size-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium text-lab-text">
-                          {node.label}
-                        </span>
-                        <span className="block truncate text-xs text-lab-text-muted">
-                          {node.description}
-                        </span>
-                      </span>
-                      <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
-                    </button>
-                  );
-                })}
-              </div>
+                return (
+                  <div key={section.label} className="mb-3 last:mb-0">
+                    <div className="px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-lab-text-muted">
+                      {section.label}
+                    </div>
+                    {sectionNodes.length > 0 ? (
+                      <div className="grid gap-2">
+                        {sectionNodes.map((node) => {
+                          const kind = isLabNodeKind(node.ui.kind) ? node.ui.kind : "note";
+                          const Icon = nodeIcons[kind];
+
+                          return (
+                            <button
+                              key={node.type}
+                              type="button"
+                              onClick={() => handleAddNode(node)}
+                              className="group flex items-center gap-3 rounded-control border border-lab-border bg-lab-surface-2 p-3 text-left transition-colors hover:border-lab-border-strong hover:bg-lab-bg focus-visible:outline-none focus-visible:shadow-lab-focus"
+                            >
+                              <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-lab-text-dim transition-colors group-hover:text-lab-reagent-bright">
+                                <Icon className="size-4" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium text-lab-text">
+                                  {node.label}
+                                </span>
+                                <span className="block truncate text-xs text-lab-text-muted">
+                                  {node.description}
+                                </span>
+                              </span>
+                              <Plus className="size-4 shrink-0 text-lab-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="px-2 py-1 text-xs text-lab-text-muted">
+                        Reservado para a próxima etapa.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
 
               <div className="px-2 pb-2 pt-4 text-[11px] font-medium uppercase tracking-wider text-lab-text-muted">
                 Em breve

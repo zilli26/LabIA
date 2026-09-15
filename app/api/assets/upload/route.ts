@@ -1,33 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
+import {
+  AssetInputValidationError,
+  validateProjectAssetFile,
+} from "@/lib/assets/asset-input";
+import { createProjectAsset } from "@/lib/assets/project-assets";
 import { hasDatabaseEnv } from "@/lib/db/env";
 import { prisma } from "@/lib/db/prisma";
+import { getOwnedExecutionScope } from "@/lib/flows/ownership";
 import { ensureDefaultImageWorkspace } from "@/lib/providers/image-generation-job";
 import { uploadBufferAssetToSupabase } from "@/lib/providers/asset-storage";
 
 export const dynamic = "force-dynamic";
 
-const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
-const ALLOWED_AUDIO_TYPES = new Set([
-  "audio/aac",
-  "audio/mp3",
-  "audio/mpeg",
-  "audio/mp4",
-  "audio/ogg",
-  "audio/wav",
-  "audio/wave",
-  "audio/x-m4a",
-  "audio/x-wav",
-]);
-
-function isValidAudioFile(file: File) {
-  const contentType = file.type.toLowerCase();
-
-  return (
-    ALLOWED_AUDIO_TYPES.has(contentType) ||
-    /\.(aac|m4a|mp3|ogg|wav)$/i.test(file.name)
-  );
+function legacyAudioValidationError(error: AssetInputValidationError) {
+  if (error.status === 413) return "O áudio precisa ter no máximo 25 MB.";
+  return "Formato de áudio inválido. Envie MP3, WAV, M4A, AAC ou OGG.";
 }
 
 export async function POST(request: Request) {
@@ -68,23 +57,58 @@ export async function POST(request: Request) {
     );
   }
 
-  if (file.size > MAX_AUDIO_UPLOAD_BYTES) {
-    return NextResponse.json(
-      { error: "O áudio precisa ter no máximo 25 MB." },
-      { status: 413 },
-    );
+  const projectId = formData.get("projectId");
+  if (projectId !== null) {
+    const role = formData.get("role");
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      return NextResponse.json({ error: "Projeto obrigatório." }, { status: 400 });
+    }
+    if (typeof role !== "string") {
+      return NextResponse.json({ error: "Papel de Asset obrigatório." }, { status: 400 });
+    }
+
+    try {
+      validateProjectAssetFile(file, role);
+      const scope = await getOwnedExecutionScope();
+      const asset = await createProjectAsset({
+        projectId: projectId.trim(),
+        scope,
+        file,
+        role,
+      });
+
+      return asset
+        ? NextResponse.json({ asset }, { status: 201 })
+        : NextResponse.json({ error: "Projeto não encontrado." }, { status: 404 });
+    } catch (error) {
+      if (error instanceof AssetInputValidationError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+
+      console.error("Failed to upload project asset", error);
+      return NextResponse.json(
+        { error: "Não foi possível enviar o Asset do Projeto. Verifique a conexão com Supabase e tente novamente." },
+        { status: 503 },
+      );
+    }
   }
 
-  if (!isValidAudioFile(file)) {
-    return NextResponse.json(
-      { error: "Formato de áudio inválido. Envie MP3, WAV, M4A, AAC ou OGG." },
-      { status: 415 },
-    );
+  let validatedAudio: ReturnType<typeof validateProjectAssetFile>;
+  try {
+    validatedAudio = validateProjectAssetFile(file, "audio");
+  } catch (error) {
+    if (error instanceof AssetInputValidationError) {
+      return NextResponse.json(
+        { error: error.status === 413 ? legacyAudioValidationError(error) : error.message.includes("vazio") ? "O arquivo de áudio está vazio." : legacyAudioValidationError(error) },
+        { status: error.status },
+      );
+    }
+    return NextResponse.json({ error: "Formato de áudio inválido. Envie MP3, WAV, M4A, AAC ou OGG." }, { status: 415 });
   }
 
   try {
     const workspace = await ensureDefaultImageWorkspace();
-    const contentType = file.type || "application/octet-stream";
+    const contentType = validatedAudio.contentType;
     const bytes = Buffer.from(await file.arrayBuffer());
     const uploaded = await uploadBufferAssetToSupabase({
       bytes,

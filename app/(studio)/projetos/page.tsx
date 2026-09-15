@@ -30,7 +30,7 @@ export default async function ProjectsPage() {
             <Badge variant="default">{projects.length}</Badge>
           </div>
           {projects.length > 0 ? projects.map((project) => (
-            <article key={project.id} className="rounded-control border border-lab-border bg-lab-surface-1 p-4">
+            <Link key={project.id} href={`/projetos/${project.id}`} aria-label={`Abrir Projeto ${project.name}`} className="group block rounded-control border border-lab-border bg-lab-surface-1 p-4 transition-colors hover:border-lab-border-strong hover:bg-lab-surface-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-2 text-lab-reagent-bright"><FolderKanban className="size-5" /></div>
@@ -42,8 +42,8 @@ export default async function ProjectsPage() {
                 <Badge variant="default">{statusLabel[project.status as keyof typeof statusLabel]}</Badge>
               </div>
               <p className="mt-3 line-clamp-2 text-sm text-lab-text-dim">{project.objective}</p>
-              {project.primaryFlow ? <Link href={`/fluxos/${project.primaryFlow.id}`} className="mt-4 inline-flex text-sm font-medium text-lab-reagent-bright hover:underline">Abrir Flow principal →</Link> : null}
-            </article>
+              <span className="mt-4 inline-flex text-sm font-medium text-lab-reagent-bright group-hover:underline">Abrir Projeto →</span>
+            </Link>
           )) : <div className="rounded-control border border-dashed border-lab-border bg-lab-surface-1 p-8 text-center text-sm text-lab-text-dim">Nenhum Projeto ainda. Comece pelo onboarding ao lado.</div>}
         </div>
       </section>

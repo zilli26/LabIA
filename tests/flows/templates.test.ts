@@ -43,4 +43,32 @@ describe("flow templates", () => {
     expect(graph.edges).toHaveLength(2);
     expect(validateFlowGraph(graph)).toEqual({ valid: true, issues: [] });
   });
+
+  it("creates the imported product to short video recipe without image generation", () => {
+    const graph = createFlowTemplateGraph("product-imported-to-video");
+
+    expect(graph.nodes.map((node) => node.data.kind)).toEqual([
+      "asset-input",
+      "video-generation",
+      "asset-output",
+    ]);
+    expect(graph.nodes.some((node) => node.data.kind === "image-generation")).toBe(false);
+    expect(graph.nodes.find((node) => node.id === "template-asset")?.data.params).toMatchObject({
+      assetId: "",
+      projectRole: "source",
+      pending: true,
+    });
+    expect(graph.edges).toEqual([
+      expect.objectContaining({
+        source: "template-asset",
+        sourceHandle: "image",
+        target: "template-video",
+      }),
+      expect.objectContaining({
+        source: "template-video",
+        target: "template-output",
+      }),
+    ]);
+    expect(validateFlowGraph(graph)).toEqual({ valid: true, issues: [] });
+  });
 });

@@ -2,6 +2,7 @@ import type { Edge, Node, Viewport } from "@xyflow/react";
 
 export type LabNodeKind =
   | "text-input"
+  | "asset-input"
   | "note"
   | "asset-output"
   | "prompt"

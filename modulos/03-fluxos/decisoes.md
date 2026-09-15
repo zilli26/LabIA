@@ -1,5 +1,11 @@
 # 03-Fluxos — Decisões
 
+- **2026-09-14 · Projeto é a casa e o canvas é a bancada** (ADR 0003). Por quê: o trabalho de produção precisa manter objetivo, fontes, referências, Flow e resultados no mesmo contexto; o canvas é a superfície de montagem e execução, não uma entrada isolada. O caminho canônico preserva o retorno canvas → Projeto.
+- **2026-09-14 · Imagem-base e referência visual são papéis distintos de Asset, expostos por `asset-input` tipado.** Por quê: uma peça real importada pode alimentar img2video sem gerar uma imagem nova, enquanto uma referência só orienta direção/modelo quando houver seleção explícita e suporte declarado. `asset-input` é leitura de Asset persistido, tem custo R$0,00 e não inicia geração.
+- **2026-09-14 · A bancada usa a paleta contextual Criar / Projeto / Pós-produção / Direção.** Por quê: organizar a intenção do trabalho torna o canvas ensinável e preserva a linguagem de laboratório noturno do LabIA sem copiar layout, identidade ou textos de terceiros.
+- **2026-09-14 · Conexão inválida deve falhar com feedback imediato.** Por quê: o usuário precisa entender o tipo incompatível no momento da ação, antes de salvar; o backend continua sendo a autoridade final.
+- **2026-09-14 · Production Director é proposta revisável, não executor.** Por quê: shotlist, grafo, prompts e custo devem ser inspecionados antes de qualquer gasto. `Aplicar ao Flow` só ocorre após revisão humana e ainda não cria FlowRun, job, Generation ou cobrança.
+
 - **2026-07-02 · Canvas é E1, não E2** (ADR 0001). Fluxo visual é o paradigma da plataforma; tudo nasce como nó.
 - **2026-07-02 · Registry de nós com contrato tipado.** Por quê: módulos plugam nós sem tocar no motor; qualquer IA adiciona um nó lendo só o contrato.
 - **2026-07-02 · Video Director propõe, humano aprova.** Por quê: custo de vídeo é alto; geração cega já queimou 2,5M tokens no passado do Felipe. Nada executa sem aprovação do fluxo proposto.

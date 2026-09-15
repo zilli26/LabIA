@@ -1,5 +1,23 @@
 # 03-Fluxos — Construção
 
+## Bloco 0 — contrato Projeto-first fixado (2026-09-14)
+
+**Status deste corte:** contrato documental registrado e pronto para orientar implementação posterior. Nenhum código, migration, worker, login, geração ou custo de API foi executado neste bloco.
+
+O contrato aprovado para o módulo é:
+
+1. **Projeto é a casa; canvas é a bancada.** O workspace do Projeto concentra objetivo, Assets, referências, Flow e resultados. O canvas mantém contexto do Projeto e tem retorno explícito para ele.
+2. **Imagem-base e referência visual são papéis de Asset**, persistidos com procedência e escopo de owner/workspace/Projeto. Referência não vira primeiro frame sem seleção explícita e suporte declarado.
+3. **`asset-input` é utilitário e custa R$0,00.** Não tem entrada, retorna Asset tipado (`image` ou `video`) após validar ownership/workspace/Projeto/tipo/papel e não chama provider, worker, Generation ou FlowRun.
+4. **Importar/selecionar retorna ao contexto Projeto.** A operação não executa geração. O caminho de vídeo pode começar em imagem real importada, sem `image-generation` intermediário.
+5. **A paleta contextual é Criar / Projeto / Pós-produção / Direção.** Ela organiza a bancada por intenção; não cria telas paralelas nem copia a identidade de plataformas de referência.
+6. **Conexão inválida recebe feedback na hora.** A UI recusa a aresta antes de adicioná-la, explica o motivo em linguagem curta e sugere o caminho compatível; o backend permanece autoridade final.
+7. **Director somente propõe.** Shotlist, grafo, prompts, referências, modelos, riscos e custo estimado aparecem como rascunho. `Aplicar ao Flow` só fica disponível após revisão humana e apenas salva/atualiza o grafo; não gera, enfileira nem cobra.
+
+### Ponteiro de implementação
+
+O próximo bloco deve implementar importação persistida e vinculada ao Projeto, seguido do nó `asset-input` e da reidratação do Flow. A validação deverá provar ownership, tipo, papel, custo zero conhecido, retorno Projeto → canvas → Projeto e bloqueio imediato de conexões incompatíveis. O Director permanece fora da implementação até a capacidade textual do executor estar comprovada pelo contrato oficial.
+
 **Hardening O5-P0 (2026-09-13):** snapshot e respostas sanitizados por allowlist; replay bloqueado por `lastSequence` e update atomico; rota autentica antes do parse e limita body a 16 KiB; heartbeat monta estado real do Codex App Server/conexoes e deriva desconectado/erro/offline. Nenhum P1 deve continuar ate este P0 ser validado; migration segue nao aplicada.
 
 **O5-P3 (2026-09-13):** CLI local de provisionamento para staging adicionada com confirmacao obrigatoria, owner/workspace local, segredo forte em memoria, hash no DB, bloqueio atomico de pairing existente e saida unica para configuracao do executor. Checklist em `docs/O5-P3-STAGING-PAIRING.md`; CLI nao executada e migration nao aplicada por este corte.

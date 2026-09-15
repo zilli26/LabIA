@@ -86,7 +86,7 @@ vi.mock("@/components/nodes/lab-flow-node", () => ({
   LabFlowNodeComponent: () => <div data-testid="lab-node" />,
 }));
 
-import { FlowCanvas } from "@/app/(studio)/fluxos/flow-canvas";
+import { FlowCanvas, getCanvasConnectionFeedback } from "@/app/(studio)/fluxos/flow-canvas";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -174,6 +174,72 @@ afterEach(() => {
 });
 
 describe("FlowCanvas layout", () => {
+  it("returns immediate feedback for an incompatible asset output connection", () => {
+    const feedback = getCanvasConnectionFeedback(
+      {
+        nodes: [
+          {
+            id: "asset",
+            type: "labNode",
+            position: { x: 0, y: 0 },
+            data: { kind: "asset-input", title: "Asset", description: "", status: "idle" },
+          },
+          {
+            id: "video",
+            type: "labNode",
+            position: { x: 1, y: 0 },
+            data: { kind: "video-generation", title: "Animar imagem", description: "", status: "idle" },
+          },
+        ],
+        edges: [],
+      },
+      {
+        source: "asset",
+        sourceHandle: "video",
+        target: "video",
+        targetHandle: "input",
+      },
+    );
+
+    expect(feedback).toMatch(/Saída video.*entrada image/i);
+
+    const promptToImage = getCanvasConnectionFeedback(
+      {
+        nodes: [
+          {
+            id: "prompt",
+            type: "labNode",
+            position: { x: 0, y: 0 },
+            data: { kind: "prompt", title: "Prompt", description: "", status: "idle" },
+          },
+          {
+            id: "image",
+            type: "labNode",
+            position: { x: 1, y: 0 },
+            data: { kind: "image-generation", title: "Imagem", description: "", status: "idle" },
+          },
+        ],
+        edges: [],
+      },
+      { source: "prompt", sourceHandle: null, target: "image", targetHandle: null },
+    );
+
+    expect(promptToImage).toBeNull();
+  });
+
+  it("organizes the node palette by production area", async () => {
+    setupFetch();
+    const { container, root } = await renderCanvas();
+
+    await click(container.querySelector("button[aria-expanded]")!);
+
+    expect(container.textContent).toContain("Criar");
+    expect(container.textContent).toContain("Projeto");
+    expect(container.textContent).toContain("Pós-produção");
+    expect(container.textContent).toContain("Direção");
+
+    await act(async () => root.unmount());
+  });
   it("cria nós em células livres, sem sobrepor o nó existente", async () => {
     setupFetch();
     const { container, root } = await renderCanvas();

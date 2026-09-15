@@ -5,7 +5,19 @@
 O [contrato de providers por nó](../../docs/OAUTH-OPENAI-ESPECIFICACAO.md) acrescenta Provider/Conexão/Modelo aos nós gerativos, Assets vindos de qualquer provider, resolução dinâmica e proteção contra submit duplicado. Montagem continua processamento LabIA. Seedance via fal.ai é modelo dessa conexão; integração Seedance direta será identificada e validada separadamente. Detalhes técnicos aguardam aprovação; a autorização anterior da E2 permanece restrita ao contrato anterior.
 
 **Etapa:** E2 · **Dor que resolve:** vídeos IA limitados a ~8s; planos caros (Higgsfield/Pika); pipeline manual no Google Flow.
-**Revisada:** 2026-07-03 (sessão de abertura da E2, aprovação Felipe pendente).
+**Revisada:** 2026-09-14 (Bloco 0, contrato Projeto-first aprovado pelo Felipe).
+
+## Contrato Projeto-first e papéis de entrada
+
+O `Project` é o contêiner do trabalho e o `Asset` importado é uma entrada persistida, reutilizável e vinculada ao Projeto. Importar uma imagem-base não gera imagem: o arquivo pode alimentar diretamente o nó de img2video (**Animar imagem**) como primeiro frame do clipe. Upload, seleção ou troca de Asset não enfileira `Generation`, não chama worker/provider e não produz custo de IA.
+
+Os papéis são distintos e não podem ser inferidos entre si:
+
+- **Imagem-base:** Asset de imagem escolhido explicitamente para ser o primeiro frame de **Animar imagem**.
+- **Referência visual:** Asset que orienta direção ou modelo somente quando o fluxo fizer uma seleção explícita e o provider declarar suporte. Referência visual não é automaticamente primeiro frame e não substitui a imagem-base.
+- **Resultado:** Asset produzido pelo Flow, com procedência e vínculo ao Projeto preservados.
+
+O template **Produto importado → Vídeo curto** começa com uma imagem-base importada e não contém geração de imagem. Gerar uma imagem nova é uma alternativa explícita, nunca uma etapa implícita do template.
 
 ## Princípio do catálogo
 
@@ -21,12 +33,19 @@ O valor do LabIA é **comparar modelos** (chineses e ocidentais) em preço × qu
 | Seedance | ByteDance (CN) | ~US$0,045/s via EvoLink; via fal.ai confirmar | confirmar | lacuna da P2 |
 | Veo 3 | Google (US) | ~R$10,80/5s | sim | premium; uso pontual, mas NO catálogo |
 
-## Nós do canvas
+## Nós do canvas e nomes públicos
 
-- **Nó Gerar Vídeo (img2video)** — recebe imagem (saída de nó de imagem ou asset da biblioteca) + prompt de movimento; params: modelo (select com preço), duração do clipe (conforme suportado pelo modelo, 5–10s), toggle "com áudio" nos modelos que suportam (custo pode diferir — tarefa 0 confirma). Chip de custo estimado ANTES. Clipe vira Asset.
-- **Nó Estender Vídeo (extend)** — recebe um clipe, extrai o último frame (ffmpeg server-side) e gera o próximo clipe via img2video com prompt de continuação. Implementação **modelo-agnóstica por frame-chaining** (validada na P2); extend nativo por modelo é evolução futura. Propaga "contexto de cena" pela aresta (re-declarar personagem/luz/câmera/estilo — regra P2). UI avisa degradação a partir do 6º encadeamento (>~60s).
-- **Nó Text2Video** — geração direta de texto para os modelos que suportam bem. Mesmo padrão do Gerar Vídeo, sem entrada de imagem.
-- **Nó Montagem** — concatena clipes na ordem das conexões (ffmpeg concat) e cuida do SONORO do vídeo final: mantém o áudio nativo dos clipes (com cortes nas emendas — limitação da técnica, ver P2) e/ou trilha/voz enviada por upload, mixada por cima cobrindo o vídeo inteiro (ffmpeg amix/volume). Exporta MP4 único como Asset.
+Os nomes públicos descrevem o resultado e preservam os tipos internos e os flows salvos:
+
+| Nome público | Tipo interno | Contrato |
+|---|---|---|
+| **Animar imagem** | `video-generation` | img2video a partir de uma imagem-base escolhida explicitamente (importada ou produzida por geração), com prompt de movimento, modelo, duração e áudio quando suportado. |
+| **Continuar clipe** | `video-extend` | recebe o resultado de uma `Generation` de vídeo upstream concluída, extrai seu último frame e gera o próximo clipe via img2video. Não estende MP4 importado. |
+| **Juntar clipes** | `video-assembly` | recebe dois ou mais clipes, concatena na ordem esquerda→direita e pode mixar trilha/voz. Não chama IA nem cria `Generation`; o custo de processamento é R$0. |
+
+O nó `Text2Video` continua sendo geração direta de texto para os modelos que suportam bem, sem entrada de imagem. Todo nó de geração exibe custo estimado antes da execução e custo real depois; nenhuma geração é enfileirada sem aprovação explícita do Felipe para aquela geração.
+
+**Juntar clipes** só é válido com 2 ou mais clipes. Seu MP4 final é um `Asset` do tipo vídeo e deve pertencer ao mesmo Projeto do Flow, resolvido por `FlowRun → Flow → Project`; não basta existir como arquivo no Storage.
 
 ## Expertise é entregável da etapa
 
@@ -35,9 +54,9 @@ Não basta o fluxo funcionar: a E2 tem que nos deixar **experts na técnica**. `
 ## Regras de produto
 
 1. **Custo de vídeo é ALTO e variável** → estimativa antes de rodar é obrigatória no nó E no fluxo inteiro. Fluxo contendo nó de vídeo exige **modal de confirmação com o custo total em R$ antes de enfileirar** (não só o chip informativo da E1).
-2. **Áudio é parte do vídeo, não acessório**: modelos com áudio nativo expõem o toggle; a Montagem sempre oferece trilha/voz. Frame-chaining não preserva áudio contínuo entre clipes (P2) — a continuidade sonora vem da trilha na Montagem.
+2. **Áudio é parte do vídeo, não acessório**: modelos com áudio nativo expõem o toggle; **Juntar clipes** sempre oferece trilha/voz. Frame-chaining não preserva áudio contínuo entre clipes (P2) — a continuidade sonora vem da trilha na montagem.
 3. Geração é lenta (30s–5min) → status por nó em tempo real; fluxo continua rodando com usuário fora da página.
-4. Todo clipe intermediário vira Asset (reaproveitável, retry barato).
+4. Todo clipe intermediário vira Asset (reaproveitável, retry barato); o frame técnico extraído por **Continuar clipe** é apenas artefato intermediário e não vira Asset de biblioteca.
 5. Falha num clipe do meio: fluxo pausa naquele nó; retry re-executa só ele (clipes anteriores já são Assets, não paga de novo).
 6. **Nenhuma geração real sem aprovação explícita do Felipe, com custo em R$ declarado antes. Aprovação de uma geração não vale para a próxima.**
 

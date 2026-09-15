@@ -28,12 +28,12 @@ export function ProjectOnboarding() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const result = await response.json() as { error?: string; project?: { primaryFlow?: { id?: string } } };
-      if (!response.ok || !result.project?.primaryFlow?.id) {
+      const result = await response.json() as { error?: string; project?: { id?: string } };
+      if (!response.ok || !result.project?.id) {
         setError(result.error ?? "Não foi possível criar o Projeto.");
         return;
       }
-      router.push(`/fluxos/${result.project.primaryFlow.id}`);
+      router.push(`/projetos/${result.project.id}`);
     } catch {
       setError("Não foi possível conectar ao control-plane local.");
     } finally {
@@ -80,7 +80,7 @@ export function ProjectOnboarding() {
       </div>
       {error ? <p role="alert" className="text-sm text-red-300">{error}</p> : null}
       <button type="submit" disabled={saving} className="h-10 rounded-control bg-lab-reagent px-4 text-sm font-semibold text-lab-bg disabled:opacity-60">
-        {saving ? "Criando…" : "Criar Projeto e abrir Flow"}
+        {saving ? "Criando…" : "Criar Projeto e abrir Projeto"}
       </button>
     </form>
   );

@@ -104,6 +104,48 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   try {
     const scope = await getOwnedExecutionScope();
+    const ownedFlow = await getOwnedFlow(flowId);
+
+    if (!ownedFlow) {
+      return NextResponse.json({ error: "Flow não encontrado." }, { status: 404 });
+    }
+
+    const assetIds = Array.from(
+      new Set(
+        body.graph.nodes
+          .filter((node) => node.data.kind === "asset-input")
+          .map((node) => node.data.params?.assetId)
+          .filter((assetId): assetId is string => typeof assetId === "string" && assetId.trim().length > 0),
+      ),
+    );
+
+    if (assetIds.length > 0) {
+      if (!ownedFlow.projectId) {
+        return NextResponse.json(
+          { error: "O Flow precisa pertencer a um Projeto para usar Asset importado." },
+          { status: 400 },
+        );
+      }
+
+      const scopedAssets = await prisma.asset.findMany({
+        where: {
+          id: { in: assetIds },
+          workspaceId: scope.workspaceId,
+          projectId: ownedFlow.projectId,
+          origin: "UPLOADED",
+          type: { in: ["IMAGE", "VIDEO"] },
+        },
+        select: { id: true },
+      });
+
+      if (scopedAssets.length !== assetIds.length) {
+        return NextResponse.json(
+          { error: "Asset não pertence ao Projeto/workspace autorizado do Flow." },
+          { status: 400 },
+        );
+      }
+    }
+
     const updated = await prisma.flow.updateMany({
       where: { id: flowId, workspaceId: scope.workspaceId },
       data: { name: body.name.trim(), graph: body.graph as unknown as import("@prisma/client").Prisma.InputJsonValue },

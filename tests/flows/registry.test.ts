@@ -106,6 +106,7 @@ describe("default nodeDefinitionRegistry singleton (populated with utility nodes
     expect(types).toEqual(
       [
         "text-input",
+        "asset-input",
         "note",
         "asset-output",
         "prompt",

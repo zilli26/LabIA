@@ -93,6 +93,23 @@ Racional: sidebar fixa de paleta era peso permanente para uma ação eventual (a
 - Fases de produção como bandas discretas no fundo do canvas (nomes da ordem canônica), sem virar BPMN.
 - Empty state sempre com uma receita concreta como CTA.
 
+## Paleta contextual de produção (Bloco 0 — 2026-09-14)
+
+O LabIA continua sendo um **laboratório noturno**: a paleta contextual organiza a bancada sem criar quatro marcas ou copiar plataformas de referência. São acentos derivados dos tokens existentes, usados em cabeçalhos de grupo, ícones, bordas discretas e badges; o reagente continua reservado a foco, execução e custo.
+
+| Contexto | Acento existente | Uso |
+|---|---|---|
+| **Criar** | `#8B7CFF` (imagem) | briefing, prompt, gerar imagem, animar imagem |
+| **Projeto** | `#38BDF8` (info) | fontes, Assets, imagem-base e referência visual |
+| **Pós-produção** | `#FFC46B` (copy) | continuar clipe, juntar clipes e fechamento do roteiro |
+| **Direção** | `#FF7AC6` (design) | proposta, shotlist, grafo e riscos do Director |
+
+Não introduzir verde adicional para representar contexto: `--lab-reagent`/`--lab-reagent-bright` continuam exclusivos para ações e números de custo. Importação conhecida pode exibir `R$0,00`; `A calcular` continua reservado a custo ainda desconhecido.
+
+Projeto é a casa visual da mídia: cards e cabeçalhos devem mostrar Projeto, papel do Asset e procedência. O canvas é a bancada: mantém o contexto do Projeto no toolbar e oferece retorno visível ao Projeto. Uma conexão incompatível deve receber mensagem curta e imediata junto à interação, sem esperar o salvamento.
+
+O Production Director usa o acento de Direção para um estado **Proposta / Rascunho**. A ação `Aplicar ao Flow` deve ser visualmente distinta da execução e só aparece após revisão; custo estimado fica visível antes de qualquer porta de geração.
+
 ## A fazer na E1
 
 - [x] Fixar paleta final (hex) e tipografia — v1, 2026-07-03

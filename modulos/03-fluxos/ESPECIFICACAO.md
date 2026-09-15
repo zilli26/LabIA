@@ -1,5 +1,56 @@
 # 03-Fluxos — Especificação (a espinha dorsal)
 
+## Contrato Projeto-first e entrada de mídia — 2026-09-14 · Bloco 0
+
+**Projeto é a casa; o canvas é a bancada.** O Projeto é o contêiner de trabalho que reúne objetivo, formato, Assets importados ou produzidos, referências escolhidas, Flow principal e resultados. O canvas é a bancada para montar, conectar, revisar e executar esse Flow. A Biblioteca continua sendo o acervo transversal, mas não substitui o contexto do Projeto.
+
+### Jornada e retorno de contexto
+
+- A jornada canônica é **Criar → Projeto → importar/selecionar Asset → abrir canvas → revisar/salvar → voltar ao Projeto**.
+- Um Flow iniciado pelo Projeto mantém `projectId` explícito no seu contexto; nome ou título nunca substitui esse vínculo.
+- O canvas exibe o Projeto atual e oferece retorno claro ao workspace do Projeto. Importar, selecionar ou aplicar uma receita não dispara execução e preserva o retorno **canvas → Projeto**.
+- A primeira entrada de vídeo de produto pode ser uma imagem real importada. **Gerar imagem** é alternativa, não pré-requisito para `Animar imagem`.
+
+### Asset, papéis e proveniência
+
+Imagem-base e referência visual são papéis distintos de um `Asset` persistido, sempre escopado por owner/workspace e, quando usado nesta jornada, pelo Projeto:
+
+- **Imagem-base (`source`)**: peça que foi explicitamente escolhida para alimentar `Animar imagem` como primeiro frame. Sua saída é tipada como `image`; escolher uma imagem-base não cria uma geração.
+- **Referência visual (`reference`)**: material que orienta direção ou um provider que declare suporte. Não vira primeiro frame nem entra em um modelo automaticamente; precisa de seleção explícita e compatibilidade declarada.
+- **Resultado**: Asset produzido por um Flow/Generation, com procedência que permite reabrir o Projeto e o Flow/FlowRun de origem.
+
+O papel do Asset deve ser carregado por metadata validada, não inferido pelo nome do arquivo, URL ou título do Flow. Upload/importação é uma operação de armazenamento e organização: não chama ModelProvider, não cria Generation/FlowRun, não enfileira job e não cobra geração.
+
+### Nó `asset-input`
+
+`asset-input` é o nó utilitário de entrada de mídia do Projeto:
+
+- não recebe entradas;
+- expõe exatamente um Asset selecionado como saída tipada `image` ou `video`, conforme o MIME/tipo persistido;
+- custa **R$0,00**, pois apenas referencia um Asset já existente;
+- valida owner, workspace, `projectId`, existência, tipo e papel permitido antes de expor o Asset ao Flow;
+- nunca aceita URL arbitrária como fonte de autoridade e nunca transforma uma referência visual em imagem-base por conveniência;
+- retorna `assetId`, tipo e localização autorizada para o executor, sem expor credenciais de Storage.
+
+O motor continua sendo a autoridade final de tipos. A UI deve validar a compatibilidade imediatamente, antes de adicionar a aresta, e explicar em texto curto por que a conexão foi recusada e qual caminho é compatível. O erro não pode aparecer somente ao salvar.
+
+### Paleta de produção do canvas
+
+As entradas e nós são agrupados por intenção, sem transformar o produto em telas isoladas:
+
+- **Criar:** Briefing, Prompt, Gerar imagem, Animar imagem.
+- **Projeto:** Importar/selecionar asset (`asset-input`), Referência visual.
+- **Pós-produção:** Continuar clipe, Juntar clipes.
+- **Direção:** Production Director, reservado à proposta estruturada até a capacidade textual estar comprovada.
+
+Os nomes públicos descrevem o resultado: `Animar imagem` é a ação img2video; `Continuar clipe` continua uma cena; `Juntar clipes` fecha um roteiro multi-cena por montagem. Tipos internos e Flows persistidos permanecem compatíveis.
+
+### Director como proposta revisável
+
+O Production Director lê o contexto autorizado do Projeto e **propõe**, em rascunho, shotlist, grafo de nós/arestas permitidos, prompts por cena, referências usadas, justificativa de modelo, riscos e custo estimado. Ele não gera mídia, não cria `FlowRun`, não enfileira job e não cobra.
+
+Somente depois de revisão humana explícita a ação **Aplicar ao Flow** pode criar ou atualizar o grafo como rascunho. Aplicar ainda não executa nada: a confirmação de custo atual e a revisão do Flow continuam sendo as portas obrigatórias para qualquer geração.
+
 ## Adendo providers por nó — 2026-09-13, O2 preservado e O3 oficial implementado para imagem
 
 Decisão recebida do Felipe: não existe provider principal; cada nó gerativo escolhe Provider/Conexão/Modelo. O [contrato proposto](../../docs/OAUTH-OPENAI-ESPECIFICACAO.md) define resolução por workspace, snapshot de execução, conclusão após Asset persistido, custo API separado de cota, anti-submit duplicado e retry seletivo. A ADR 0002 registra o porquê. Detalhes técnicos deste adendo aguardam aprovação.
@@ -37,7 +88,7 @@ Não simular upload, referência, custo, provider ou geração. Não iniciar gas
 - Canvas React Flow: adicionar/conectar/executar nós; salvar fluxo (`Flow`); executar (`FlowRun`) com status visual por nó (aguardando/rodando/pronto/erro).
 - **Custo acumulado do fluxo** sempre visível (estimado antes, real durante/depois).
 - Execução assíncrona: usuário pode sair da página; fluxo continua (pg-boss).
-- Nós de utilidade: entrada de texto, upload, anotação.
+- Nós de utilidade: entrada de texto, `asset-input` e anotação. A importação acontece no contexto do Projeto e não executa geração.
 
 ### Templates de fluxo (E2+) — spec aprovada pelo Felipe em 2026-07-04 (base: P9)
 
@@ -66,7 +117,7 @@ O canvas ensina a pensar em PROCESSO de produção, não em nós. Requisitos (pr
 Ordem canônica de produção que fundamenta tudo (P8): briefing → direção criativa → roteiro/copy → referências e prompts visuais → geração de candidatos (barato antes de caro) → curadoria humana → montagem → adaptação por rede → publicação → aprendizado registrado.
 
 ### AI Video Director (E3)
-Nó-agente que recebe briefing (objetivo, produto, referências, duração) e PRODUZE o fluxo: shotlist (beats), prompts por cena com refs nomeadas, escolha de modelo por cena e **estimativa de custo total antes de gerar qualquer coisa**. Origem: spec do vault (`fluxos-video-ia-pipeline.md`) — o elo que falta entre roteiro e geração, onde o Felipe já queimou 2,5M+ tokens sem direção.
+Nó-agente que recebe briefing (objetivo, produto, referências, duração) e **propõe um fluxo revisável**: shotlist (beats), prompts por cena com refs nomeadas, escolha de modelo por cena e **estimativa de custo total antes de gerar qualquer coisa**. A proposta só pode ser aplicada ao Flow após revisão humana explícita; aplicar não executa geração. Origem: spec do vault (`fluxos-video-ia-pipeline.md`) — o elo que falta entre roteiro e geração, onde o Felipe já queimou 2,5M+ tokens sem direção.
 
 ## Regras de produto
 1. Todo nó declara: entradas tipadas, saídas tipadas, custo estimado. O motor valida conexões por tipo (copy não liga direto em montagem, etc.).

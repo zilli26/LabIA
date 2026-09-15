@@ -104,6 +104,11 @@ describe("video-generation node", () => {
     });
   });
 
+  it("uses the public action name Animar imagem while keeping the persisted type", () => {
+    expect(videoDefinition.type).toBe("video-generation");
+    expect(videoDefinition.label).toBe("Animar imagem");
+  });
+
   it.each([
     ["fal-ai/wan-25-preview/image-to-video", { duration: "5", resolution: "480p" }],
     ["fal-ai/kling-video/v2.5-turbo/pro/image-to-video", { duration: "5" }],
@@ -181,6 +186,24 @@ describe("video-generation node", () => {
       model: "fal-ai/wan-25-preview/image-to-video",
       estimatedCost,
     });
+  });
+
+  it("does not use a visual reference as the first frame", async () => {
+    await expect(
+      videoDefinition.execute(
+        makeContext({
+          inputs: {
+            input: {
+              assetId: "reference-asset",
+              url: "https://assets.example.com/reference.png",
+              type: "image",
+              projectRole: "reference",
+            },
+          },
+        }),
+      ),
+    ).rejects.toThrow(/referência visual.*primeiro frame/i);
+    expect(mockEnqueueVideoGenerationJob).not.toHaveBeenCalled();
   });
 
   it("fails readably and does not enqueue when the image Generation FAILED", async () => {

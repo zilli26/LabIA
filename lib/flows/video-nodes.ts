@@ -276,6 +276,13 @@ async function resolveImageUrl({
   input: unknown;
   params: Record<string, unknown>;
 }) {
+  const inputRecord = getRecord(input);
+  if (inputRecord?.projectRole === "reference") {
+    throw new Error(
+      "Referência visual não pode ser usada como primeiro frame. Selecione um Asset source.",
+    );
+  }
+
   const directUrl = getDirectImageUrl(params) ?? getDirectImageUrl(input);
 
   if (directUrl) {
@@ -528,7 +535,7 @@ function buildContinuationPrompt({
 export const videoNodeDefinitions: NodeDefinition[] = [
   {
     type: "video-generation",
-    label: "Gerar Vídeo",
+    label: "Animar imagem",
     description: "Gera img2video via fal.ai com custo estimado antes do gasto.",
     inputs: [
       {

@@ -1,6 +1,7 @@
 import type { FlowGraph, LabFlowNode } from "@/lib/flows/graph";
 
 export type FlowTemplateId = "image-to-video" | "image-only";
+export type ProductFlowTemplateId = "product-imported-to-video";
 
 function node(
   id: string,
@@ -13,7 +14,60 @@ function node(
   return { id, type: "labNode", position, data: { kind, title, description, status: "idle", params } };
 }
 
-export function createFlowTemplateGraph(template: FlowTemplateId): FlowGraph {
+export function createFlowTemplateGraph(
+  template: FlowTemplateId | ProductFlowTemplateId,
+): FlowGraph {
+  if (template === "product-imported-to-video") {
+    const asset = node(
+      "template-asset",
+      "asset-input",
+      "Imagem-base",
+      "Selecione um Asset source importado no Projeto.",
+      { x: 96, y: 120 },
+      { assetId: "", projectRole: "source", pending: true },
+    );
+    const video = node(
+      "template-video",
+      "video-generation",
+      "Animar imagem",
+      "Vídeo curto a partir da imagem-base selecionada.",
+      { x: 512, y: 120 },
+      {
+        providerId: "fal",
+        model: "fal-ai/wan-25-preview/image-to-video",
+        duration: "5",
+        resolution: "1080p",
+        prompt: "",
+      },
+    );
+    const output = node(
+      "template-output",
+      "asset-output",
+      "Saída",
+      "Destino do resultado produzido pelo fluxo.",
+      { x: 928, y: 120 },
+    );
+
+    return {
+      nodes: [asset, video, output],
+      edges: [
+        {
+          id: "template-asset-to-video",
+          source: asset.id,
+          sourceHandle: "image",
+          target: video.id,
+          type: "smoothstep",
+        },
+        {
+          id: "template-video-to-output",
+          source: video.id,
+          target: output.id,
+          type: "smoothstep",
+        },
+      ],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    };
+  }
   const prompt = node("template-prompt", "prompt", "Prompt", "Direção da imagem-base.", { x: 96, y: 120 }, { prompt: "" });
   const image = node("template-image", "image-generation", "Gerar Imagem", "Imagem-base com provider selecionável no canvas.", { x: 448, y: 120 }, { providerId: "fal", model: "fal-ai/flux/dev", prompt: "" });
   const output = node("template-output", "asset-output", "Saída", "Destino do resultado produzido pelo fluxo.", { x: template === "image-to-video" ? 1152 : 800, y: 120 });

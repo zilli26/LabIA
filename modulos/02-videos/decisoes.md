@@ -1,5 +1,17 @@
 # 02-Vídeos — Decisões
 
+## Contrato Projeto-first — 2026-09-14
+
+- **Imagem-base importada alimenta img2video sem geração de imagem.** Por quê: o Projeto deve aceitar a peça real do usuário como entrada legítima de **Animar imagem**; importar, selecionar ou trocar o Asset não pode criar `Generation`, chamar provider ou cobrar IA.
+- **Referência visual não é automaticamente primeiro frame.** Por quê: referência orienta direção/modelo somente após seleção explícita e suporte declarado pelo provider; confundir os papéis pode animar o arquivo errado e quebrar a intenção do Projeto.
+- **Nomes públicos preservam tipos internos.** **Animar imagem**, **Continuar clipe** e **Juntar clipes** são rótulos de produto para `video-generation`, `video-extend` e `video-assembly`, respectivamente. Por quê: a linguagem do usuário deve explicar o resultado sem quebrar flows persistidos, registry ou compatibilidade interna.
+- **Continuar clipe exige Generation de vídeo upstream concluída.** O nó extrai o último frame dessa Generation e o usa como entrada técnica do próximo img2video; não estende MP4 importado. Por quê: a continuidade é de uma cena já gerada e o contrato atual não torna vídeo importado um upstream elegível para `video-extend`.
+- **Juntar clipes exige 2+ clipes e é pós-produção local.** Concatena os clipes na ordem esquerda→direita e pode preservar/mixar trilha ou voz; não gera IA, não cria `Generation` e custa R$0. Por quê: juntar material existente é diferente de produzir um novo clipe pago.
+- **Asset final de Juntar clipes pertence ao Projeto.** A criação deve resolver o Projeto por `FlowRun → Flow → Project` e gravar o vínculo no Asset, mesmo sem `generationId`. Por quê: um arquivo no Storage sem o Projeto correto perde procedência e não aparece no acervo de trabalho certo.
+- **Template Produto importado → Vídeo curto não gera imagem.** O caminho começa com imagem-base importada e fica pendente se ela não for selecionada; gerar do zero é alternativa explícita. Por quê: o template deve honrar o criativo/produto real e não inserir gasto oculto.
+- **Custo e aprovação permanecem por geração.** Toda geração de vídeo mostra estimativa em R$ antes e custo real depois; nenhuma geração é enfileirada sem aprovação explícita individual do Felipe. Importação e montagem local não são geração e não devem simular custo de IA.
+- **Aliases históricos não mudam o contrato público.** Quando as decisões antigas abaixo mencionam `Gerar Vídeo`, `Estender Vídeo` ou `Montagem`, elas registram nomes/tarefas históricas; a UI atual deve usar **Animar imagem**, **Continuar clipe** e **Juntar clipes**, mantendo os tipos internos correspondentes.
+
 - **2026-07-02 · Vídeo longo via encadeamento (extend), não via modelo de vídeo longo.** Por quê: modelos atuais entregam 5–10s por geração; o encadeamento last-frame é a técnica que Higgsfield/Flow usam e dá controle criativo por trecho. Revalidar quando P2 rodar (e a cada 6 meses — modelos evoluem rápido).
 - **2026-07-02 · Clipes intermediários são Assets de primeira classe.** Por quê: reaproveitamento entre fluxos e retry barato.
 - **2026-07-03 · Catálogo amplo de modelos, gate no gasto (não no catálogo).** Todos os modelos viáveis via fal.ai entram no select com preço (Wan, Kling, Hailuo, Seedance, Veo 3 — chineses e ocidentais); comparar preço × qualidade é o produto. Por quê: estar no catálogo custa R$0; a proteção de gasto é a aprovação explícita do Felipe antes de cada geração, não a remoção do modelo. (Decisão do Felipe revertendo proposta de cortar Veo 3.)
