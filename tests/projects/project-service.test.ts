@@ -91,4 +91,36 @@ describe("createProject", () => {
       data: expect.objectContaining({ durationSeconds: null }),
     }));
   });
+
+  it("vincula o Flow primário ao Projeto e usa a receita de produto importado", async () => {
+    const graph = {
+      nodes: [
+        { id: "asset", data: { kind: "asset-input" } },
+        { id: "video", data: { kind: "video-generation" } },
+        { id: "output", data: { kind: "asset-output" } },
+      ],
+      edges: [],
+    };
+    mocks.createFlowTemplateGraph.mockReturnValue(graph);
+
+    await createProject({
+      ownerId: "owner-1",
+      workspaceId: "workspace-owned",
+      name: "Produto importado",
+      type: "VIDEO",
+      objective: "Vídeo curto de produto",
+      aspectRatio: "9:16",
+      durationSeconds: 5,
+      flowTemplate: "product-imported-to-video",
+    } as never);
+
+    expect(mocks.createFlowTemplateGraph).toHaveBeenCalledWith("product-imported-to-video");
+    expect(mocks.flowCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        projectId: "project-1",
+        graph,
+      }),
+    }));
+    expect(graph.nodes.map((node) => node.data.kind)).not.toContain("image-generation");
+  });
 });

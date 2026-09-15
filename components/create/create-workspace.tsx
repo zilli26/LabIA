@@ -29,13 +29,20 @@ const templates: Array<{ id: FlowTemplate; title: string; description: string; p
   },
 ];
 
-async function createTemplate(template: FlowTemplate) {
+type ProductProjectDraft = {
+  name: string;
+  objective: string;
+  aspectRatio: "9:16";
+  durationSeconds: 5;
+};
+
+async function createTemplate(template: FlowTemplate, project?: ProductProjectDraft) {
   const response = await fetch("/api/flows", {
     method: "POST",
     credentials: "same-origin",
     cache: "no-store",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ template }),
+    body: JSON.stringify(project ? { template, project } : { template }),
   });
   const payload = (await response.json().catch(() => ({}))) as { flow?: { id?: unknown }; error?: unknown };
   if (!response.ok || typeof payload.flow?.id !== "string") {
@@ -47,15 +54,33 @@ async function createTemplate(template: FlowTemplate) {
 export function CreateWorkspace() {
   const router = useRouter();
   const [selectedTemplate, setSelectedTemplate] = useState<FlowTemplate>("image-to-video");
+  const [projectName, setProjectName] = useState("");
+  const [projectObjective, setProjectObjective] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate() {
     if (isCreating) return;
+    const isProductImport = selectedTemplate === "product-imported-to-video";
+    if (isProductImport && !projectName.trim()) {
+      setError("Informe um nome para o Projeto.");
+      return;
+    }
+
     setIsCreating(true);
     setError(null);
     try {
-      const flowId = await createTemplate(selectedTemplate);
+      const flowId = await createTemplate(
+        selectedTemplate,
+        isProductImport
+          ? {
+              name: projectName.trim(),
+              objective: projectObjective.trim(),
+              aspectRatio: "9:16",
+              durationSeconds: 5,
+            }
+          : undefined,
+      );
       router.push(`/fluxos/${flowId}`);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Não foi possível criar o fluxo.");
@@ -105,10 +130,49 @@ export function CreateWorkspace() {
           ))}
         </div>
 
+        {selectedTemplate === "product-imported-to-video" ? (
+          <div className="mt-5 grid gap-4 rounded-control border border-lab-border bg-lab-surface-2 p-4 sm:grid-cols-2" aria-label="Dados do Projeto">
+            <label className="grid gap-1.5 text-sm text-lab-text" htmlFor="project-name">
+              Nome do Projeto <span className="text-xs text-lab-text-muted">obrigatório</span>
+              <input
+                id="project-name"
+                name="project-name"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                placeholder="Ex.: Produto X — TikTok Shop"
+                required
+                className="lab-ghost-input"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm text-lab-text" htmlFor="project-objective">
+              Objetivo do Projeto <span className="text-xs text-lab-text-muted">opcional</span>
+              <textarea
+                id="project-objective"
+                name="project-objective"
+                value={projectObjective}
+                onChange={(event) => setProjectObjective(event.target.value)}
+                placeholder="Ex.: demonstrar o produto em um vídeo curto."
+                rows={3}
+                className="lab-ghost-input min-h-20 resize-y"
+              />
+            </label>
+            <div className="flex items-center gap-4 text-xs text-lab-text-muted sm:col-span-2">
+              <span>Proporção padrão: <strong className="text-lab-text">9:16</strong></span>
+              <span>Duração padrão: <strong className="text-lab-text">5 segundos</strong></span>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-lab-border pt-5">
           <Button type="button" onClick={() => void handleCreate()} disabled={isCreating} data-id="create-template">
             {isCreating ? <Loader2 className="animate-spin" aria-hidden /> : <ChevronRight aria-hidden />}
-            {isCreating ? "Criando fluxo..." : "Editar no canvas"}
+            {isCreating
+              ? selectedTemplate === "product-imported-to-video"
+                ? "Criando Projeto..."
+                : "Criando fluxo..."
+              : selectedTemplate === "product-imported-to-video"
+                ? "Criar Projeto e abrir canvas"
+                : "Editar no canvas"}
           </Button>
           <p className="text-xs text-lab-text-muted">Nenhuma geração é executada nesta etapa.</p>
         </div>

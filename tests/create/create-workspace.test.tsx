@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreateWorkspace } from "@/components/create/create-workspace";
 
@@ -25,6 +25,10 @@ afterEach(() => {
 });
 
 describe("CreateWorkspace template launcher", () => {
+  beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  });
+
   it("starts with the enabled image-base to short-video template", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ flow: { id: "flow-video-1" } }, 201));
     vi.stubGlobal("fetch", fetchMock);
@@ -116,6 +120,19 @@ describe("CreateWorkspace template launcher", () => {
 
     await act(async () => productVideo?.click());
     expect(productVideo?.getAttribute("aria-checked")).toBe("true");
+    expect(container.textContent).toContain("Nome do Projeto");
+    expect(container.textContent).toContain("Objetivo do Projeto");
+    expect(container.textContent).toContain("9:16");
+    expect(container.textContent).toContain("5 segundos");
+    expect(container.textContent).toContain("Criar Projeto e abrir canvas");
+
+    const projectName = container.querySelector<HTMLInputElement>("[name=project-name]");
+    expect(projectName).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(projectName, "Produto X");
+      projectName!.dispatchEvent(new Event("input", { bubbles: true }));
+      projectName!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-id="create-template"]')?.click();
@@ -126,7 +143,15 @@ describe("CreateWorkspace template launcher", () => {
       "/api/flows",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ template: "product-imported-to-video" }),
+        body: JSON.stringify({
+          template: "product-imported-to-video",
+          project: {
+            name: "Produto X",
+            objective: "",
+            aspectRatio: "9:16",
+            durationSeconds: 5,
+          },
+        }),
       }),
     );
     expect(router.push).toHaveBeenCalledWith("/fluxos/flow-product-video-1");

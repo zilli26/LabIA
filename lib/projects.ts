@@ -1,13 +1,18 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
-import { createFlowTemplateGraph } from "@/lib/flows/templates";
+import {
+  createFlowTemplateGraph,
+  type FlowTemplateId,
+  type ProductFlowTemplateId,
+} from "@/lib/flows/templates";
 
 export const PROJECT_TYPES = ["IMAGE", "VIDEO"] as const;
 export const PROJECT_STATUSES = ["DRAFT", "IN_PROGRESS", "REVIEW", "APPROVED", "ARCHIVED"] as const;
 
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export type ProjectFlowTemplateId = FlowTemplateId | ProductFlowTemplateId;
 export type ProjectScope = { ownerId: string; workspaceId: string };
 export type CreateProjectInput = {
   ownerId: string;
@@ -18,10 +23,16 @@ export type CreateProjectInput = {
   aspectRatio: string;
   durationSeconds: number | null;
   status?: ProjectStatus;
+  flowTemplate?: ProjectFlowTemplateId;
 };
 
 const projectInclude = {
   primaryFlow: { select: { id: true, name: true } },
+  _count: { select: { flows: true, assets: true } },
+} satisfies Prisma.ProjectInclude;
+
+const createdProjectInclude = {
+  primaryFlow: { select: { id: true, name: true, projectId: true, graph: true } },
   _count: { select: { flows: true, assets: true } },
 } satisfies Prisma.ProjectInclude;
 
@@ -39,19 +50,20 @@ export async function createProject(input: CreateProjectInput) {
         status,
       },
     });
+    const flowTemplate = input.flowTemplate ?? (input.type === "VIDEO" ? "image-to-video" : "image-only");
     const flow = await tx.flow.create({
       data: {
         workspaceId: input.workspaceId,
         projectId: project.id,
         name: `${input.name} · Flow principal`,
         isTemplate: false,
-        graph: createFlowTemplateGraph(input.type === "VIDEO" ? "image-to-video" : "image-only") as unknown as Prisma.InputJsonValue,
+        graph: createFlowTemplateGraph(flowTemplate) as unknown as Prisma.InputJsonValue,
       },
     });
     return tx.project.update({
       where: { id: project.id },
       data: { primaryFlowId: flow.id },
-      include: projectInclude,
+      include: createdProjectInclude,
     });
   });
 }
