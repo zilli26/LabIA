@@ -105,6 +105,61 @@ describe("POST /api/flows templates", () => {
     expect(payload.flow.graph.nodes.map((node: { data: { kind: string } }) => node.data.kind)).not.toContain("image-generation");
   });
 
+  it("creates a Project and linked Flow for the production blueprint", async () => {
+    mocks.createProject.mockResolvedValue({
+      id: "project-blueprint-1",
+      name: "Blueprint Produto X",
+      primaryFlow: {
+        id: "flow-blueprint-1",
+        name: "Blueprint Produto X · Flow principal",
+        projectId: "project-blueprint-1",
+        graph: {
+          nodes: [
+            { id: "briefing", data: { kind: "text-input" } },
+            { id: "source", data: { kind: "asset-input" } },
+            { id: "assembly", data: { kind: "video-assembly" } },
+          ],
+          edges: [],
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/flows", {
+        method: "POST",
+        body: JSON.stringify({
+          template: "product-production-blueprint",
+          project: {
+            name: "Blueprint Produto X",
+            objective: "Organizar um vídeo de produto por etapas.",
+            aspectRatio: "9:16",
+            durationSeconds: 5,
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.createProject).toHaveBeenCalledWith({
+      ownerId: "owner-1",
+      workspaceId: "workspace-1",
+      name: "Blueprint Produto X",
+      objective: "Organizar um vídeo de produto por etapas.",
+      type: "VIDEO",
+      aspectRatio: "9:16",
+      durationSeconds: 5,
+      flowTemplate: "product-production-blueprint",
+    });
+    expect(mocks.createFlow).not.toHaveBeenCalled();
+
+    const payload = await response.json();
+    expect(payload.project).toMatchObject({
+      id: "project-blueprint-1",
+      primaryFlowId: "flow-blueprint-1",
+    });
+    expect(payload.flow.projectId).toBe("project-blueprint-1");
+  });
+
   it("rejects unknown template keys without creating a Flow", async () => {
     const response = await POST(
       new Request("http://localhost/api/flows", {

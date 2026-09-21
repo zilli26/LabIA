@@ -34,7 +34,7 @@ O grafo registra `mcpTool` nos parâmetros dos nós para tornar a futura camada 
 |---|---|---|
 | Contexto | `read_project_context` | Nota local, sem chamada externa |
 | Teste | `estimate_and_request_generation` | Estimativa + confirmação humana |
-| Revisão | `record_human_decision` | Gate visual/documental, sem execução automática |
+| Revisão | `record_human_decision` | Nota de decisão; ainda sem bloqueio automático |
 | Continuidade | `extend_approved_clip` | Só depois do clipe aprovado |
 | Finalização | `assemble_approved_clips` | Montagem local, custo R$0 |
 
@@ -46,4 +46,5 @@ O próximo passo não é abrir um MCP remoto. É aprender o contrato de cada aç
 - O nó `Animar imagem` continua sujeito ao modal de custo.
 - `Continuar clipe` depende de um vídeo concluído.
 - `Juntar clipes` é local e não dispara provider.
+- `Revisar / escolher` é uma Nota explícita nesta primeira versão; ainda não bloqueia sozinha a execução.
 - Nenhuma geração é iniciada ao criar o template.

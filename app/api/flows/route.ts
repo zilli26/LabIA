@@ -22,6 +22,12 @@ function isAcceptedFlowTemplate(value: unknown): value is AcceptedFlowTemplateId
     || value === "product-production-blueprint";
 }
 
+function isProjectFlowTemplate(
+  value: AcceptedFlowTemplateId | undefined,
+): value is ProductFlowTemplateId {
+  return value === "product-imported-to-video" || value === "product-production-blueprint";
+}
+
 function parseImportedProductProject(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { error: "Informe os dados mínimos do Projeto para este template." } as const;
@@ -127,7 +133,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Template de fluxo inválido." }, { status: 400 });
     }
 
-    if (acceptedTemplate === "product-imported-to-video") {
+    if (isProjectFlowTemplate(acceptedTemplate)) {
       const parsedProject = parseImportedProductProject(body.project);
       if (!("value" in parsedProject) || !parsedProject.value) {
         return NextResponse.json({ error: parsedProject.error }, { status: 400 });

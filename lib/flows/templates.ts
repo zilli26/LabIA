@@ -64,7 +64,7 @@ export function createFlowTemplateGraph(
       "blueprint-review",
       "note",
       "Revisar / escolher",
-      "Gate humano: só o clipe aprovado continua para expansão.",
+      "Ponto de decisão: registre a escolha antes de expandir a cena.",
       { x: 816, y: 300 },
       { stage: "review", humanApprovalRequired: true, mcpTool: "record_human_decision" },
     );
