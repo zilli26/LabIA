@@ -71,4 +71,35 @@ describe("flow templates", () => {
     ]);
     expect(validateFlowGraph(graph)).toEqual({ valid: true, issues: [] });
   });
+
+  it("creates the production blueprint with human review before expansion", () => {
+    const graph = createFlowTemplateGraph("product-production-blueprint");
+
+    expect(graph.nodes.map((node) => node.data.kind)).toEqual([
+      "text-input",
+      "note",
+      "asset-input",
+      "video-generation",
+      "note",
+      "video-extend",
+      "video-assembly",
+      "asset-output",
+    ]);
+    expect(graph.nodes.find((node) => node.id === "blueprint-review")?.data.params).toMatchObject({
+      humanApprovalRequired: true,
+      mcpTool: "record_human_decision",
+    });
+    expect(graph.nodes.find((node) => node.id === "blueprint-assembly")?.data.params).toMatchObject({
+      stage: "finalize",
+      mcpTool: "assemble_approved_clips",
+    });
+    expect(graph.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: "blueprint-source", target: "blueprint-animate", sourceHandle: "image" }),
+      expect.objectContaining({ source: "blueprint-animate", target: "blueprint-review" }),
+      expect.objectContaining({ source: "blueprint-review", target: "blueprint-continue" }),
+      expect.objectContaining({ source: "blueprint-animate", target: "blueprint-assembly" }),
+      expect.objectContaining({ source: "blueprint-continue", target: "blueprint-assembly" }),
+    ]));
+    expect(validateFlowGraph(graph)).toEqual({ valid: true, issues: [] });
+  });
 });

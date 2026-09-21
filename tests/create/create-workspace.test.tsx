@@ -125,6 +125,7 @@ describe("CreateWorkspace template launcher", () => {
     expect(container.textContent).toContain("9:16");
     expect(container.textContent).toContain("5 segundos");
     expect(container.textContent).toContain("Criar Projeto e abrir canvas");
+    expect(container.querySelector<HTMLButtonElement>('[data-id="create-template"]')?.className).toContain("min-h-11");
 
     const projectName = container.querySelector<HTMLInputElement>("[name=project-name]");
     expect(projectName).not.toBeNull();
@@ -155,6 +156,54 @@ describe("CreateWorkspace template launcher", () => {
       }),
     );
     expect(router.push).toHaveBeenCalledWith("/fluxos/flow-product-video-1");
+
+    await act(async () => root.unmount());
+  });
+
+  it("exposes the production blueprint as a real canvas recipe", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ flow: { id: "flow-blueprint-1" } }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<CreateWorkspace />));
+
+    const blueprint = container.querySelector<HTMLButtonElement>(
+      '[data-template="product-production-blueprint"]',
+    );
+    expect(blueprint).not.toBeNull();
+    await act(async () => blueprint?.click());
+    expect(container.textContent).toContain("Briefing, contexto, teste, revisão, continuidade e montagem");
+    expect(container.textContent).toContain("Nome do Projeto");
+
+    const projectName = container.querySelector<HTMLInputElement>("[name=project-name]");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(projectName, "Blueprint Produto X");
+      projectName!.dispatchEvent(new Event("input", { bubbles: true }));
+      projectName!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-id="create-template"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/flows",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          template: "product-production-blueprint",
+          project: {
+            name: "Blueprint Produto X",
+            objective: "",
+            aspectRatio: "9:16",
+            durationSeconds: 5,
+          },
+        }),
+      }),
+    );
+    expect(router.push).toHaveBeenCalledWith("/fluxos/flow-blueprint-1");
 
     await act(async () => root.unmount());
   });

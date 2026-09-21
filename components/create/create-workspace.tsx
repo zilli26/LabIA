@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type FlowTemplate = "image-to-video" | "image-only" | "product-imported-to-video";
+type FlowTemplate = "image-to-video" | "image-only" | "product-imported-to-video" | "product-production-blueprint";
 
 const templates: Array<{ id: FlowTemplate; title: string; description: string; primary?: boolean }> = [
   {
@@ -26,6 +26,11 @@ const templates: Array<{ id: FlowTemplate; title: string; description: string; p
     id: "product-imported-to-video",
     title: "Produto importado → Vídeo curto",
     description: "Começa com uma imagem-base do Projeto e não gera imagem automaticamente.",
+  },
+  {
+    id: "product-production-blueprint",
+    title: "Blueprint de produção → Vídeo de produto",
+    description: "Briefing, contexto, teste, revisão, continuidade e montagem em um único Flow.",
   },
 ];
 
@@ -58,11 +63,11 @@ export function CreateWorkspace() {
   const [projectObjective, setProjectObjective] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isProjectTemplate = selectedTemplate === "product-imported-to-video" || selectedTemplate === "product-production-blueprint";
 
   async function handleCreate() {
     if (isCreating) return;
-    const isProductImport = selectedTemplate === "product-imported-to-video";
-    if (isProductImport && !projectName.trim()) {
+    if (isProjectTemplate && !projectName.trim()) {
       setError("Informe um nome para o Projeto.");
       return;
     }
@@ -72,7 +77,7 @@ export function CreateWorkspace() {
     try {
       const flowId = await createTemplate(
         selectedTemplate,
-        isProductImport
+        isProjectTemplate
           ? {
               name: projectName.trim(),
               objective: projectObjective.trim(),
@@ -89,14 +94,14 @@ export function CreateWorkspace() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-5 px-4 py-5 lg:px-6 lg:py-8">
+    <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-5 px-4 py-6 sm:px-5 lg:px-6 lg:py-8">
       <header className="border-b border-lab-border pb-5">
         <p className="font-mono text-xs uppercase tracking-wide text-lab-text-muted">Novo fluxo</p>
         <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">O que você quer criar?</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-lab-text-dim">Escolha uma receita inicial. O Flow real será criado e aberto no canvas para edição e execução.</p>
       </header>
 
-      <section className="rounded-lab border border-lab-border bg-lab-surface-1 p-5" aria-labelledby="template-heading">
+      <section className="rounded-lab border border-lab-border bg-lab-surface-1 p-4 sm:p-5" aria-labelledby="template-heading">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-mono text-[11px] uppercase text-lab-text-muted">Receitas iniciais</p>
@@ -114,7 +119,7 @@ export function CreateWorkspace() {
               aria-checked={selectedTemplate === template.id}
               data-template={template.id}
               onClick={() => setSelectedTemplate(template.id)}
-              className={cn("flex min-h-32 items-start gap-3 rounded-control border p-4 text-left transition-colors", selectedTemplate === template.id ? "border-lab-reagent/60 bg-lab-reagent-dim" : "border-lab-border bg-lab-surface-2 hover:border-lab-border-strong")}
+              className={cn("flex min-h-32 items-start gap-3 rounded-control border p-3 text-left transition-colors focus-visible:outline-none focus-visible:shadow-lab-focus sm:p-4", selectedTemplate === template.id ? "border-lab-reagent/60 bg-lab-reagent-dim" : "border-lab-border bg-lab-surface-2 hover:border-lab-border-strong")}
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-lab-border bg-lab-surface-1 text-[var(--lab-node-video)]">
                 {template.primary ? <Clapperboard className="size-4" aria-hidden /> : <FileImage className="size-4" aria-hidden />}
@@ -130,7 +135,7 @@ export function CreateWorkspace() {
           ))}
         </div>
 
-        {selectedTemplate === "product-imported-to-video" ? (
+        {isProjectTemplate ? (
           <div className="mt-5 grid gap-4 rounded-control border border-lab-border bg-lab-surface-2 p-4 sm:grid-cols-2" aria-label="Dados do Projeto">
             <label className="grid gap-1.5 text-sm text-lab-text" htmlFor="project-name">
               Nome do Projeto <span className="text-xs text-lab-text-muted">obrigatório</span>
@@ -141,7 +146,7 @@ export function CreateWorkspace() {
                 onChange={(event) => setProjectName(event.target.value)}
                 placeholder="Ex.: Produto X — TikTok Shop"
                 required
-                className="lab-ghost-input"
+                className="lab-ghost-input lab-hit-target h-auto min-h-11 px-3 py-2"
               />
             </label>
             <label className="grid gap-1.5 text-sm text-lab-text" htmlFor="project-objective">
@@ -153,7 +158,7 @@ export function CreateWorkspace() {
                 onChange={(event) => setProjectObjective(event.target.value)}
                 placeholder="Ex.: demonstrar o produto em um vídeo curto."
                 rows={3}
-                className="lab-ghost-input min-h-20 resize-y"
+                className="lab-ghost-input min-h-24 h-auto resize-y px-3 py-2"
               />
             </label>
             <div className="flex items-center gap-4 text-xs text-lab-text-muted sm:col-span-2">
@@ -164,13 +169,13 @@ export function CreateWorkspace() {
         ) : null}
 
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-lab-border pt-5">
-          <Button type="button" onClick={() => void handleCreate()} disabled={isCreating} data-id="create-template">
+          <Button type="button" className="lab-hit-target min-h-11" onClick={() => void handleCreate()} disabled={isCreating} data-id="create-template">
             {isCreating ? <Loader2 className="animate-spin" aria-hidden /> : <ChevronRight aria-hidden />}
             {isCreating
-              ? selectedTemplate === "product-imported-to-video"
+              ? isProjectTemplate
                 ? "Criando Projeto..."
                 : "Criando fluxo..."
-              : selectedTemplate === "product-imported-to-video"
+              : isProjectTemplate
                 ? "Criar Projeto e abrir canvas"
                 : "Editar no canvas"}
           </Button>

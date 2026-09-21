@@ -16,7 +16,10 @@ export const dynamic = "force-dynamic";
 type AcceptedFlowTemplateId = FlowTemplateId | ProductFlowTemplateId;
 
 function isAcceptedFlowTemplate(value: unknown): value is AcceptedFlowTemplateId {
-  return value === "image-to-video" || value === "image-only" || value === "product-imported-to-video";
+  return value === "image-to-video"
+    || value === "image-only"
+    || value === "product-imported-to-video"
+    || value === "product-production-blueprint";
 }
 
 function parseImportedProductProject(value: unknown) {
@@ -117,6 +120,7 @@ export async function POST(request: Request) {
       "image-to-video": "Imagem-base → Vídeo curto",
       "image-only": "Imagem-base",
       "product-imported-to-video": "Produto importado → Vídeo curto",
+      "product-production-blueprint": "Blueprint de produção → Vídeo de produto",
     };
     const acceptedTemplate = isAcceptedFlowTemplate(template) ? template : undefined;
     if (template !== undefined && acceptedTemplate === undefined) {

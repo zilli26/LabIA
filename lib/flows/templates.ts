@@ -1,7 +1,9 @@
 import type { FlowGraph, LabFlowNode } from "@/lib/flows/graph";
 
 export type FlowTemplateId = "image-to-video" | "image-only";
-export type ProductFlowTemplateId = "product-imported-to-video";
+export type ProductFlowTemplateId =
+  | "product-imported-to-video"
+  | "product-production-blueprint";
 
 function node(
   id: string,
@@ -17,6 +19,104 @@ function node(
 export function createFlowTemplateGraph(
   template: FlowTemplateId | ProductFlowTemplateId,
 ): FlowGraph {
+  if (template === "product-production-blueprint") {
+    const briefing = node(
+      "blueprint-briefing",
+      "text-input",
+      "Briefing",
+      "Intenção, público e hipótese que o fluxo precisa responder.",
+      { x: 48, y: 64 },
+      { text: "", stage: "briefing" },
+    );
+    const context = node(
+      "blueprint-context",
+      "note",
+      "Contexto do Projeto",
+      "Registro de contexto para uma futura camada MCP de direção.",
+      { x: 336, y: 64 },
+      { stage: "context", mcpTool: "read_project_context" },
+    );
+    const asset = node(
+      "blueprint-source",
+      "asset-input",
+      "Imagem-base",
+      "Asset source importado e aprovado no Projeto.",
+      { x: 48, y: 300 },
+      { assetId: "", projectRole: "source", pending: true, stage: "source" },
+    );
+    const animate = node(
+      "blueprint-animate",
+      "video-generation",
+      "Animar imagem",
+      "Primeiro clipe: testar movimento com custo visível.",
+      { x: 432, y: 300 },
+      {
+        providerId: "fal",
+        model: "fal-ai/wan-25-preview/image-to-video",
+        duration: "5",
+        resolution: "1080p",
+        prompt: "",
+        stage: "test",
+        mcpTool: "estimate_and_request_generation",
+      },
+    );
+    const review = node(
+      "blueprint-review",
+      "note",
+      "Revisar / escolher",
+      "Gate humano: só o clipe aprovado continua para expansão.",
+      { x: 816, y: 300 },
+      { stage: "review", humanApprovalRequired: true, mcpTool: "record_human_decision" },
+    );
+    const extend = node(
+      "blueprint-continue",
+      "video-extend",
+      "Continuar clipe",
+      "Expandir a cena aprovada a partir do último frame.",
+      { x: 1200, y: 300 },
+      {
+        providerId: "fal",
+        model: "fal-ai/wan-25-preview/image-to-video",
+        duration: "5",
+        resolution: "1080p",
+        prompt: "",
+        sceneContext: "",
+        stage: "expand",
+        mcpTool: "extend_approved_clip",
+      },
+    );
+    const assembly = node(
+      "blueprint-assembly",
+      "video-assembly",
+      "Juntar clipes",
+      "Montagem local das cenas aprovadas; custo R$0.",
+      { x: 1600, y: 300 },
+      { stage: "finalize", mcpTool: "assemble_approved_clips" },
+    );
+    const output = node(
+      "blueprint-output",
+      "asset-output",
+      "Saída",
+      "Entrega final e evidência recuperável do trabalho.",
+      { x: 1960, y: 300 },
+      { stage: "deliver" },
+    );
+
+    return {
+      nodes: [briefing, context, asset, animate, review, extend, assembly, output],
+      edges: [
+        { id: "blueprint-briefing-to-context", source: briefing.id, target: context.id, type: "smoothstep" },
+        { id: "blueprint-asset-to-animate", source: asset.id, sourceHandle: "image", target: animate.id, type: "smoothstep" },
+        { id: "blueprint-animate-to-review", source: animate.id, target: review.id, type: "smoothstep" },
+        { id: "blueprint-review-to-continue", source: review.id, target: extend.id, type: "smoothstep" },
+        { id: "blueprint-animate-to-assembly", source: animate.id, target: assembly.id, type: "smoothstep" },
+        { id: "blueprint-continue-to-assembly", source: extend.id, target: assembly.id, type: "smoothstep" },
+        { id: "blueprint-assembly-to-output", source: assembly.id, target: output.id, type: "smoothstep" },
+      ],
+      viewport: { x: 0, y: 0, zoom: 0.8 },
+    };
+  }
+
   if (template === "product-imported-to-video") {
     const asset = node(
       "template-asset",
