@@ -640,6 +640,8 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
   });
   const costConfirmRequestRef = useRef(0);
   const flowLoadedRef = useRef(false);
+  const flowProjectIdRef = useRef<string | undefined>(undefined);
+  const ensureProjectPromiseRef = useRef<Promise<string> | null>(null);
   const assetFileInputRef = useRef<HTMLInputElement>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [flowProjectId, setFlowProjectId] = useState<string | undefined>();
@@ -827,6 +829,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
 
     setFlowName(payload.flow.name);
     setFlowProjectId(payload.flow.projectId ?? undefined);
+    flowProjectIdRef.current = payload.flow.projectId ?? undefined;
     setNodes(
       graph.nodes.map((node) =>
         node.data.kind === "asset-input" && payload.flow.projectId
@@ -1118,48 +1121,53 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     [flowProjectId, screenToFlowPosition, setNodes],
   );
 
-  const addProjectAssetNode = useCallback(
-    (asset: CanvasProjectAsset) => {
-      if (!flowProjectId) {
-        setErrorMessage("Este Flow ainda não está vinculado a um Projeto.");
-        return;
-      }
-
-      const definition = createActionDefinition({
-        id: "asset-input",
-        label: "Asset importado",
-        description: "Conecte este Asset à entrada de Animar imagem.",
-        kind: "asset-input",
-        icon: UploadCloud,
-      });
-      const anchor = screenToFlowPosition({
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      });
+  const fillProjectAssetNode = useCallback(
+    (asset: CanvasProjectAsset, projectId: string) => {
+      const assetParams = {
+        assetId: asset.assetId,
+        assetType: asset.type,
+        projectId,
+        projectRole: asset.projectRole ?? "source",
+        pending: false,
+      };
 
       setNodes((currentNodes) => {
-        const node = createNode(
-          definition,
-          findFreeNodePosition(currentNodes, anchor),
-          flowProjectId,
+        const withProjectId = currentNodes.map((node) =>
+          node.data.kind === "asset-input"
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  params: {
+                    ...(node.data.params ?? {}),
+                    projectId,
+                  },
+                },
+              }
+            : node,
         );
+        const target = withProjectId.find((node) => {
+          if (node.data.kind !== "asset-input") return false;
+          const params = (node.data.params ?? {}) as Record<string, unknown>;
+          return typeof params.assetId !== "string" || params.assetId.trim().length === 0;
+        });
 
+        if (target) {
+          return withProjectId.map((node) =>
+            node.id === target.id
+              ? { ...node, data: { ...node.data, params: { ...(node.data.params ?? {}), ...assetParams } } }
+              : node,
+          );
+        }
+
+        const anchor = screenToFlowPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+        const node = createNode(assetInputDefinition, findFreeNodePosition(withProjectId, anchor), projectId);
         return [
-          ...currentNodes,
-          {
-            ...node,
-            data: {
-              ...node.data,
-              params: {
-                ...(node.data.params ?? {}),
-                assetId: asset.assetId,
-                assetType: asset.type,
-                projectId: flowProjectId,
-                projectRole: asset.projectRole ?? "source",
-                pending: false,
-              },
-            },
-          },
+          ...withProjectId,
+          { ...node, data: { ...node.data, params: { ...(node.data.params ?? {}), ...assetParams } } },
         ];
       });
       setIsDirty(true);
@@ -1167,7 +1175,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       setIsNodeMenuOpen(false);
       setIsProjectAssetPickerOpen(false);
     },
-    [flowProjectId, screenToFlowPosition, setNodes],
+    [screenToFlowPosition, setNodes],
   );
 
   const requestProjectForFlow = useCallback((action: Exclude<PendingProjectAction, null>) => {
@@ -1218,14 +1226,37 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
     await loadProjectAssets(flowProjectId);
   }, [flowProjectId, loadProjectAssets, requestProjectForFlow]);
 
-  const handleImportBaseImage = useCallback(() => {
-    if (!flowProjectId) {
-      requestProjectForFlow("import-base-image");
-      return;
+  const ensureFlowProject = useCallback(async () => {
+    const knownProjectId = flowProjectIdRef.current ?? flowProjectId;
+    if (knownProjectId) return knownProjectId;
+
+    if (!ensureProjectPromiseRef.current) {
+      ensureProjectPromiseRef.current = (async () => {
+        const response = await fetch(`/api/flows/${flowId}/project`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: flowName.trim() || "Novo Projeto", objective: "" }),
+        });
+        const payload = (await response.json()) as { flow?: { projectId?: string }; error?: string };
+        if (!response.ok || !payload.flow?.projectId) {
+          throw new Error(payload.error ?? "Não foi possível criar o Projeto para este Flow.");
+        }
+        flowProjectIdRef.current = payload.flow.projectId;
+        setFlowProjectId(payload.flow.projectId);
+        return payload.flow.projectId;
+      })().finally(() => {
+        ensureProjectPromiseRef.current = null;
+      });
     }
 
+    return ensureProjectPromiseRef.current;
+  }, [flowId, flowName, flowProjectId]);
+
+  const handleImportBaseImage = useCallback(() => {
+    setPendingProjectAction(null);
+    setIsProjectAssetPickerOpen(false);
     assetFileInputRef.current?.click();
-  }, [flowProjectId, requestProjectForFlow]);
+  }, []);
 
   const handleCreateProjectForFlow = useCallback(async () => {
     const name = flowProjectName.trim();
@@ -1285,7 +1316,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       const file = input.files?.[0];
       input.value = "";
 
-      if (!file || !flowProjectId) {
+      if (!file) {
         return;
       }
 
@@ -1293,10 +1324,11 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
       setErrorMessage(null);
 
       try {
+        const projectId = await ensureFlowProject();
         const formData = new FormData();
         formData.append("file", file);
         formData.append("role", "source");
-        const response = await fetch(`/api/projects/${flowProjectId}/assets`, {
+        const response = await fetch(`/api/projects/${projectId}/assets`, {
           method: "POST",
           body: formData,
         });
@@ -1309,7 +1341,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
           throw new Error(payload.error ?? "Não foi possível importar a imagem-base.");
         }
 
-        addProjectAssetNode(payload.asset);
+        fillProjectAssetNode(payload.asset, projectId);
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -1320,7 +1352,7 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
         setIsImportingAsset(false);
       }
     },
-    [addProjectAssetNode, flowProjectId],
+    [ensureFlowProject, fillProjectAssetNode],
   );
 
   const handleSave = useCallback(async () => {
@@ -1781,7 +1813,9 @@ function FlowCanvasInner({ flowId }: { flowId: string }) {
                           key={asset.assetId}
                           type="button"
                           data-asset-option={asset.assetId}
-                          onClick={() => addProjectAssetNode(asset)}
+                          onClick={() => {
+                            if (flowProjectId) fillProjectAssetNode(asset, flowProjectId);
+                          }}
                           className="rounded-control border border-lab-border bg-lab-surface-2 px-3 py-2 text-left text-xs text-lab-text transition-colors hover:border-lab-border-strong focus-visible:outline-none focus-visible:shadow-lab-focus"
                         >
                           <span className="block font-medium">{asset.assetId}</span>

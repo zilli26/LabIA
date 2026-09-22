@@ -299,18 +299,14 @@ describe("ações de Asset no canvas do Flow", () => {
     await act(async () => root.unmount());
   });
 
-  it("oferece criar Projeto para Flow legado e retoma a importação", async () => {
+  it("cria o Projeto automaticamente ao importar imagem no canvas legado", async () => {
     const fetchMock = setupFetch({ projectId: null });
     const { container, root } = await renderCanvas();
 
     await click(container.querySelector('[aria-label="Criar"]')!);
     await click(container.querySelector('[data-action="import-base-image"]')!);
 
-    expect(container.textContent).toContain("Criar Projeto para este Flow");
-    const projectName = container.querySelector<HTMLInputElement>("[name=flow-project-name]");
-    expect(projectName?.value).toBe("Flow do Projeto");
-
-    await click(container.querySelector('[data-action="create-project-for-flow"]')!);
+    expect(container.querySelector('[data-testid="flow-project-link-panel"]')).toBeNull();
     const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]');
     const file = new File(["png bytes"], "produto.png", { type: "image/png" });
     Object.defineProperty(fileInput, "files", { configurable: true, value: [file] });

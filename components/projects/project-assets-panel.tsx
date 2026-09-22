@@ -29,6 +29,57 @@ type ProjectAssetsPanelProps = {
   onUploaded: (asset: ProjectAsset) => void;
 };
 
+type ImportIntentId = "image-base" | "reference" | "video-source";
+
+const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
+const VIDEO_ACCEPT = "video/mp4,video/quicktime,video/webm";
+
+const IMPORT_INTENTS: Array<{
+  id: ImportIntentId;
+  label: string;
+  description: string;
+  formatLabel: string;
+  role: "source" | "reference";
+  accept: string;
+  uploadingLabel: string;
+  successMessage: string;
+  errorMessage: string;
+}> = [
+  {
+    id: "image-base",
+    label: "Imagem do produto / imagem-base",
+    description: "Foto, criativo ou imagem do produto que será o primeiro frame do vídeo.",
+    formatLabel: "JPG, PNG ou WebP",
+    role: "source",
+    accept: IMAGE_ACCEPT,
+    uploadingLabel: "Enviando imagem-base…",
+    successMessage: "Imagem do produto importada.",
+    errorMessage: "Não foi possível importar a imagem do produto. Tente novamente.",
+  },
+  {
+    id: "reference",
+    label: "Character sheet / referência",
+    description: "Character sheet, pessoa, estilo, produto ou imagem para orientar direção.",
+    formatLabel: "JPG, PNG, WebP, MP4, MOV ou WebM",
+    role: "reference",
+    accept: `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`,
+    uploadingLabel: "Enviando referência visual…",
+    successMessage: "Character sheet / referência importada.",
+    errorMessage: "Não foi possível importar a character sheet / referência. Tente novamente.",
+  },
+  {
+    id: "video-source",
+    label: "Vídeo de referência / produto",
+    description: "Vídeo existente do produto, TikTok ou exemplo de movimento.",
+    formatLabel: "MP4, MOV ou WebM",
+    role: "source",
+    accept: VIDEO_ACCEPT,
+    uploadingLabel: "Enviando vídeo…",
+    successMessage: "Vídeo de referência importado.",
+    errorMessage: "Não foi possível importar o vídeo de referência. Tente novamente.",
+  },
+];
+
 export function isProjectAsset(value: unknown): value is ProjectAsset {
   if (!value || typeof value !== "object") return false;
   const asset = value as Partial<ProjectAsset>;
@@ -69,23 +120,32 @@ function AssetPreview({ asset }: { asset: ProjectAsset }) {
 
 export function ProjectAssetsPanel({ projectId, assets, loading, error, onUploaded }: ProjectAssetsPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [intentId, setIntentId] = useState<ImportIntentId | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const inputId = `project-image-base-${projectId}`;
+  const inputId = `project-media-${projectId}`;
+  const intent = IMPORT_INTENTS.find((candidate) => candidate.id === intentId) ?? null;
+
+  function selectIntent(nextIntent: ImportIntentId) {
+    if (uploading) return;
+    setIntentId(nextIntent);
+    setUploadSuccess(null);
+    setUploadError(null);
+  }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const file = input.files?.[0];
-    if (!file) return;
+    if (!file || !intent) return;
 
     setUploading(true);
-    setUploadSuccess(false);
+    setUploadSuccess(null);
     setUploadError(null);
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("role", "source");
+    formData.append("role", intent.role);
 
     try {
       const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, {
@@ -97,9 +157,9 @@ export function ProjectAssetsPanel({ projectId, assets, loading, error, onUpload
       if (!response.ok || !isProjectAsset(asset)) throw new Error("upload_failed");
 
       onUploaded(asset);
-      setUploadSuccess(true);
+      setUploadSuccess(intent.successMessage);
     } catch {
-      setUploadError("Não foi possível importar a imagem-base. Tente novamente.");
+      setUploadError(intent.errorMessage);
     } finally {
       setUploading(false);
       input.value = "";
@@ -112,16 +172,40 @@ export function ProjectAssetsPanel({ projectId, assets, loading, error, onUpload
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-sky-300">Projeto · fontes</p>
           <h2 id="project-assets-title" className="mt-1 font-display text-xl font-semibold">Fontes e referências</h2>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-lab-text-dim">Mídias deste Projeto ficam disponíveis para revisão e para a bancada do Flow. Importar ou selecionar Asset não gera mídia.</p>
+          <p className="mt-1 max-w-xl text-sm leading-6 text-lab-text-dim">É aqui que você coloca o material que já tem: character sheet, foto do produto, criativo ou vídeo do TikTok. Depois ele aparece no Flow. Importar não gera mídia.</p>
         </div>
-        <Button type="button" onClick={() => inputRef.current?.click()} disabled={uploading} aria-controls={inputId} aria-describedby="project-assets-import-note">
-          <Upload />
-          {uploading ? "Enviando imagem-base…" : "Importar imagem-base"}
-        </Button>
-        <input ref={inputRef} id={inputId} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Selecionar imagem-base JPG, PNG ou WebP" className="sr-only" onChange={handleFileChange} />
       </div>
-      <p id="project-assets-import-note" className="mt-3 text-xs text-lab-text-muted">JPG, PNG e WebP são salvos neste Projeto como imagem-base. Nenhuma geração é iniciada aqui.</p>
-      {uploadSuccess ? <p role="status" className="mt-3 text-sm text-lab-success">Imagem-base importada.</p> : null}
+
+      <div className="mt-5 grid gap-2 sm:grid-cols-3" role="group" aria-label="Intenção da mídia">
+        {IMPORT_INTENTS.map((candidate) => {
+      const selected = candidate.id === intentId;
+          return (
+            <button
+              key={candidate.id}
+              type="button"
+              aria-pressed={selected}
+              disabled={uploading}
+              onClick={() => selectIntent(candidate.id)}
+              className={`min-h-11 rounded-control border p-3 text-left transition-colors focus-visible:outline-none focus-visible:shadow-lab-focus ${selected ? "border-lab-reagent/50 bg-lab-reagent-dim" : "border-lab-border bg-lab-surface-2 hover:border-lab-border-strong"}`}
+            >
+              <span className="block text-sm font-medium text-lab-text">{candidate.label}</span>
+              <span className="mt-1 block text-xs leading-5 text-lab-text-muted">{candidate.description}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button className="min-h-11" type="button" onClick={() => inputRef.current?.click()} disabled={uploading || !intent} aria-controls={inputId} aria-describedby="project-assets-import-note">
+          <Upload />
+          {uploading ? intent?.uploadingLabel : "Importar mídia"}
+        </Button>
+        <p id="project-assets-import-note" className="text-xs text-lab-text-muted">
+          {intent ? `${intent.label}: ${intent.formatLabel}.` : "Escolha primeiro o tipo de material que você vai importar."} Nenhuma geração é iniciada aqui.
+        </p>
+        <input ref={inputRef} id={inputId} type="file" accept={intent?.accept ?? ""} aria-label={intent ? `Selecionar ${intent.label.toLowerCase()}` : "Selecionar arquivo após escolher uma intenção"} className="sr-only" onChange={handleFileChange} />
+      </div>
+      {uploadSuccess ? <p role="status" className="mt-3 text-sm text-lab-success">{uploadSuccess}</p> : null}
       {uploadError ? <p role="alert" className="mt-3 text-sm text-red-200">{uploadError}</p> : null}
 
       <div className="mt-5" aria-live="polite" aria-busy={loading}>

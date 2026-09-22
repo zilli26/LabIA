@@ -101,7 +101,10 @@ describe("CreateWorkspace template launcher", () => {
   });
 
   it("exposes the imported product to short video path without implicit image generation", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ flow: { id: "flow-product-video-1" } }, 201));
+    const fetchMock = vi.fn(async () => jsonResponse({
+      flow: { id: "flow-product-video-1" },
+      project: { id: "project-product-video-1" },
+    }, 201));
     vi.stubGlobal("fetch", fetchMock);
 
     const container = document.createElement("div");
@@ -161,7 +164,10 @@ describe("CreateWorkspace template launcher", () => {
   });
 
   it("exposes the production blueprint as a real canvas recipe", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ flow: { id: "flow-blueprint-1" } }, 201));
+    const fetchMock = vi.fn(async () => jsonResponse({
+      flow: { id: "flow-blueprint-1" },
+      project: { id: "project-blueprint-1" },
+    }, 201));
     vi.stubGlobal("fetch", fetchMock);
 
     const container = document.createElement("div");

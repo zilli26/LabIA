@@ -49,11 +49,18 @@ async function createTemplate(template: FlowTemplate, project?: ProductProjectDr
     headers: { "content-type": "application/json" },
     body: JSON.stringify(project ? { template, project } : { template }),
   });
-  const payload = (await response.json().catch(() => ({}))) as { flow?: { id?: unknown }; error?: unknown };
+  const payload = (await response.json().catch(() => ({}))) as {
+    flow?: { id?: unknown };
+    project?: { id?: unknown };
+    error?: unknown;
+  };
   if (!response.ok || typeof payload.flow?.id !== "string") {
     throw new Error(typeof payload.error === "string" ? payload.error : "Não foi possível criar o fluxo.");
   }
-  return payload.flow.id;
+  return {
+    flowId: payload.flow.id,
+    projectId: typeof payload.project?.id === "string" ? payload.project.id : null,
+  };
 }
 
 export function CreateWorkspace() {
@@ -75,7 +82,7 @@ export function CreateWorkspace() {
     setIsCreating(true);
     setError(null);
     try {
-      const flowId = await createTemplate(
+      const created = await createTemplate(
         selectedTemplate,
         isProjectTemplate
           ? {
@@ -86,7 +93,7 @@ export function CreateWorkspace() {
             }
           : undefined,
       );
-      router.push(`/fluxos/${flowId}`);
+      router.push(`/fluxos/${created.flowId}`);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Não foi possível criar o fluxo.");
       setIsCreating(false);

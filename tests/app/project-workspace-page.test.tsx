@@ -41,6 +41,28 @@ const uploadedImage = {
   metadata: { originalFileName: "produto-uploaded.png", projectRole: "source" },
 };
 
+const uploadedReference = {
+  assetId: "asset-reference-uploaded",
+  type: "IMAGE",
+  origin: "UPLOADED",
+  url: "https://assets.example.test/reference-uploaded.webp",
+  contentType: "image/webp",
+  width: 1080,
+  height: 1920,
+  metadata: { originalFileName: "reference-uploaded.webp", projectRole: "reference" },
+};
+
+const uploadedVideo = {
+  assetId: "asset-video-uploaded",
+  type: "VIDEO",
+  origin: "UPLOADED",
+  url: "https://assets.example.test/product-uploaded.mp4",
+  contentType: "video/mp4",
+  width: 1080,
+  height: 1920,
+  metadata: { originalFileName: "product-uploaded.mp4", projectRole: "source" },
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -54,11 +76,23 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-async function chooseFile(container: HTMLElement, file: File) {
+async function chooseIntent(container: HTMLElement, label: string) {
+  const intentButton = [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent?.includes(label));
+  expect(intentButton).not.toBeUndefined();
+  await act(async () => {
+    intentButton!.click();
+    await Promise.resolve();
+  });
+  return intentButton!;
+}
+
+async function chooseFile(container: HTMLElement, file: File, intent = "Imagem do produto / imagem-base", accept = "image/jpeg,image/png,image/webp") {
+  await chooseIntent(container, intent);
   const input = container.querySelector<HTMLInputElement>('input[type="file"]');
   expect(input).not.toBeNull();
-  expect(input?.getAttribute("accept")).toBe("image/jpeg,image/png,image/webp");
-  expect(input?.getAttribute("aria-label")).toContain("imagem-base");
+  expect(input?.getAttribute("accept")).toBe(accept);
+  expect(input?.getAttribute("aria-label")).toContain(intent.toLowerCase());
   Object.defineProperty(input, "files", { configurable: true, value: [file] });
   await act(async () => {
     input!.dispatchEvent(new Event("change", { bubbles: true }));
@@ -113,7 +147,8 @@ describe("workspace do Projeto", () => {
     expect(container.textContent).toContain("Demonstrar o produto em um vídeo curto.");
     expect(container.textContent).toContain("Fontes e referências");
     expect(container.textContent).toContain("produto.png");
-    expect(container.textContent).toContain("Importar imagem-base");
+    expect(container.textContent).toContain("Imagem do produto / imagem-base");
+    expect(container.textContent).toContain("Importar mídia");
     expect(container.textContent).toContain("Abrir Flow");
     expect(container.querySelector('a[href="/fluxos/flow-a"]')).not.toBeNull();
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("/assets") && (init as RequestInit)?.method !== "GET")).toBe(false);
@@ -128,8 +163,12 @@ describe("workspace do Projeto", () => {
 
     expect(container.textContent).toContain("Nenhuma fonte ou referência neste Projeto.");
     expect(container.textContent).not.toContain("produto.png");
-    const importButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Importar imagem-base"));
-    expect(importButton?.disabled).toBe(false);
+    const intentButtons = [...container.querySelectorAll<HTMLButtonElement>("button")].filter((button) => ["Imagem do produto / imagem-base", "Character sheet / referência", "Vídeo de referência / produto"].some((label) => button.textContent?.includes(label)));
+    expect(intentButtons).toHaveLength(3);
+    expect(intentButtons.every((button) => button.className.includes("min-h-11"))).toBe(true);
+    const importButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Importar mídia"));
+    expect(importButton?.disabled).toBe(true);
+    expect(container.textContent).toContain("Importar mídia");
     await act(async () => root.unmount());
   });
 
@@ -158,9 +197,65 @@ describe("workspace do Projeto", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Imagem-base importada.");
+    expect(container.textContent).toContain("Imagem do produto importada.");
     expect(container.textContent).toContain("produto-uploaded.png");
-    expect(container.textContent).toContain("Imagem-base");
+    expect(container.textContent).toContain("Imagem do produto / imagem-base");
+    await act(async () => root.unmount());
+  });
+
+  it("envia referência visual como multipart reference e aceita imagem ou vídeo", async () => {
+    const file = new File([new Uint8Array([7, 8, 9])], "reference-uploaded.webp", { type: "image/webp" });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return jsonResponse({ asset: uploadedReference }, 201);
+      return String(input).endsWith("/assets") ? jsonResponse({ assets: [importedImage] }) : jsonResponse({ project });
+    });
+    const { container, root } = await renderWorkspace(fetchMock);
+
+    await chooseFile(
+      container,
+      file,
+      "Character sheet / referência",
+      "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm",
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect((postCall?.[1]?.body as FormData).get("role")).toBe("reference");
+    expect((postCall?.[1]?.body as FormData).get("file")).toBe(file);
+    expect(container.textContent).toContain("Character sheet / referência importada.");
+    expect(container.textContent).toContain("reference-uploaded.webp");
+    await act(async () => root.unmount());
+  });
+
+  it("envia vídeo de referência como multipart source e aceita MP4, MOV ou WebM", async () => {
+    const file = new File([new Uint8Array([10, 11, 12])], "product-uploaded.mp4", { type: "video/mp4" });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return jsonResponse({ asset: uploadedVideo }, 201);
+      return String(input).endsWith("/assets") ? jsonResponse({ assets: [importedImage] }) : jsonResponse({ project });
+    });
+    const { container, root } = await renderWorkspace(fetchMock);
+
+    await chooseFile(
+      container,
+      file,
+      "Vídeo de referência / produto",
+      "video/mp4,video/quicktime,video/webm",
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect((postCall?.[1]?.body as FormData).get("role")).toBe("source");
+    expect((postCall?.[1]?.body as FormData).get("file")).toBe(file);
+    expect(container.textContent).toContain("Vídeo de referência importado.");
+    expect(container.textContent).toContain("product-uploaded.mp4");
     await act(async () => root.unmount());
   });
 
@@ -181,7 +276,7 @@ describe("workspace do Projeto", () => {
 
     expect(container.textContent).toContain("produto.png");
     expect(container.textContent).not.toContain("falha.webp");
-    expect(container.textContent).toContain("Não foi possível importar a imagem-base");
+    expect(container.textContent).toContain("Não foi possível importar a imagem do produto");
     expect(container.textContent).not.toContain("Storage indisponível.");
     await act(async () => root.unmount());
   });
