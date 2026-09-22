@@ -13,6 +13,7 @@
     "worker": "tsx scripts/worker.ts",
     "worker:image": "tsx scripts/image-worker.ts",
     "provider:executor": "tsx scripts/provider-executor.ts",
+    "mcp:stdio": "tsx scripts/mcp-server.ts",
     "staging:readiness": "tsx scripts/check-staging-readiness.ts",
     "staging:provision-executor": "tsx scripts/provision-executor-pairing.ts",
     "prisma:generate": "prisma generate",
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@prisma/client": "^6.0.0",
     "@radix-ui/react-slot": "^1.1.0",
     "@supabase/supabase-js": "^2.0.0",
@@ -33,7 +35,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
-    "tailwind-merge": "^2.5.5"
+    "tailwind-merge": "^2.5.5",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",
