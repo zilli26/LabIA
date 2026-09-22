@@ -8,7 +8,9 @@ Laboratório de produção de conteúdo com IA: canvas de fluxos, geração de i
 2. [Estado vivo e próxima ação](docs/RETOMADA.md) — a seção mais recente prevalece sobre registros históricos.
 3. [Plano ChatGPT, OAuth, Google, MCP e produção por cenas](docs/PLANO-CHATGPT-MCP-E-PRODUCAO.md).
 4. [Mensagem pronta para continuar pelo ChatGPT](docs/PROMPT-RETOMADA-CHATGPT.md).
-5. [Regras de trabalho](AGENTS.md), [roadmap](docs/03-ROADMAP.md) e [arquitetura](docs/01-ARQUITETURA.md).
+5. [Skill operacional do LabIA para ChatGPT](docs/LABIA-CHATGPT-SKILL.md).
+6. [Contrato MCP piloto](docs/MCP-CONTRATO-PILOTO.md).
+7. [Regras de trabalho](AGENTS.md), [roadmap](docs/03-ROADMAP.md) e [arquitetura](docs/01-ARQUITETURA.md).
 
 Este é o repositório de continuidade: [zilli26/LabIA](https://github.com/zilli26/LabIA). Ao retomar, confira a revisão atual da branch `main`; os hashes antigos nos documentos são evidência histórica.
 
